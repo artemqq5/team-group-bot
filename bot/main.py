@@ -12,7 +12,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
 
 import bot.domain.routers.admin.chat.main_chat as main_chat_module
+import bot.domain.routers.admin.group.main_group as main_group_module
 from bot.data.repositories.AdminRepository import AdminRepository
+from bot.domain.routers import events_
 from bot.domain.routers.user import main_
 from bot.domain.tools.BotCheckChat import check_bot_membership
 
@@ -39,7 +41,9 @@ dp = Dispatcher(storage=storage)
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
 dp.include_routers(
+    events_.router,
     main_chat_module.router,
+    main_group_module.router,
     main_.router,
 )
 
@@ -61,7 +65,8 @@ async def _health_check_loop(bot: Bot):
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await bot.delete_webhook()
-    await bot.set_webhook(url=WEBHOOK_BASE_URL + WEBHOOK_PATH, secret_token=SECRET_TOKEN, drop_pending_updates=True)
+    await bot.set_webhook(url=WEBHOOK_BASE_URL + WEBHOOK_PATH, secret_token=SECRET_TOKEN, drop_pending_updates=True,
+                          allowed_updates=dp.resolve_used_update_types())
     logging.info(f"Webhook set: {WEBHOOK_BASE_URL + WEBHOOK_PATH}")
     task = asyncio.create_task(_health_check_loop(bot))
     yield
