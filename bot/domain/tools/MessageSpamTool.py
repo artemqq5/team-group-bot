@@ -68,7 +68,7 @@ async def _send_message(bot: Bot, data: dict, group_id):
 
 
 async def push_new_user_added(bot: Bot, message: str):
-    admins = await AdminRepository.get_admins()
+    admins = await AdminRepository.get_admins() or []
     for admin in admins:
         try:
             await bot.send_message(chat_id=admin.telegram_id, text=message)
