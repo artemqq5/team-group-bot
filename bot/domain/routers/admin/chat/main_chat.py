@@ -8,13 +8,14 @@ from bot.data.repositories.ChatRepository import ChatRepository
 from bot.data.repositories.UserRepository import UserRepository
 from bot.domain.filters.IsGroup import IsGropFilter
 from bot.domain.middlewares.IsPrivateChatAdmin import IsPrivateChatAdmin
-from bot.domain.routers.admin.chat.menu import show_, message_, statistic_, admins_, groups_
+from bot.domain.routers.admin.chat.menu import show_, bulk_, message_, statistic_, admins_, groups_
 from bot.domain.tools.edit_helper import edit_or_answer
 from bot.presentation.keyboard.admin_ import MainMenuCallback, kb_main
 
 router = Router()
 router.include_routers(
     show_.router,
+    bulk_.router,
     message_.router,
     statistic_.router,
     admins_.router,

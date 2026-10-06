@@ -101,6 +101,27 @@ class ChatRepository:
             return False
 
     @staticmethod
+    async def bulk_set_categories(group_ids, categories) -> int:
+        categories = [
+            c for c in categories
+            if has_value_enum(TypeOfChats, c) and c != TypeOfChats.ALL.value
+        ]
+        if not group_ids or not categories:
+            return 0
+        try:
+            async with async_session() as session:
+                async with session.begin():
+                    result = await session.execute(
+                        update(ChatModel)
+                        .values({c: True for c in categories})
+                        .where(ChatModel.group_id.in_([str(g) for g in group_ids]))
+                    )
+                    return result.rowcount
+        except Exception as e:
+            logging.error(f"[ChatRepository] bulk_set_categories error: {e}")
+            return 0
+
+    @staticmethod
     @log_exc_with_try_except()
     async def count_chats_by_category() -> dict:
         async with async_session() as session:

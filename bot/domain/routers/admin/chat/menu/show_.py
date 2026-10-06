@@ -45,7 +45,7 @@ async def show_groups_by_type(callback: CallbackQuery, callback_data: ShowTypeCa
         title = chat_type
 
     chats = chats or []
-    await state.update_data(chats=chats)
+    await state.update_data(chats=chats, list_type=chat_type)
 
     if not chats:
         await edit_or_answer(
@@ -59,7 +59,9 @@ async def show_groups_by_type(callback: CallbackQuery, callback_data: ShowTypeCa
     await edit_or_answer(
         callback,
         f"Групи за типом <b>{title}</b> ({len(chats)}):",
-        reply_markup=generate_pagination_groups(current_page=1, groups=chats)
+        reply_markup=generate_pagination_groups(
+            current_page=1, groups=chats, bulk_button=chat_type == "unspecified"
+        )
     )
     await callback.answer()
 
@@ -69,7 +71,10 @@ async def page_group_listener(callback: CallbackQuery, callback_data: GroupPageC
     data = await state.get_data()
     chats = data.get("chats", [])
     await callback.message.edit_reply_markup(
-        reply_markup=generate_pagination_groups(current_page=callback_data.page, groups=chats)
+        reply_markup=generate_pagination_groups(
+            current_page=callback_data.page, groups=chats,
+            bulk_button=data.get("list_type") == "unspecified"
+        )
     )
     await callback.answer()
 
