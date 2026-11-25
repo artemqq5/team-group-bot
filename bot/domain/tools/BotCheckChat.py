@@ -38,12 +38,12 @@ async def check_bot_membership(bot, chat_id: int) -> None:
             await bot.get_chat_member(chat_id=chat.group_id, user_id=bot_id)
         except TelegramForbiddenError:
             ok = await ChatRepository.remove_chat(chat.group_id)
-            removed.append(f"⛔ {label} — {'видалено ✅' if ok else 'не вдалось ❌'}")
+            removed.append(f"⛔ {label} — {'удалено ✅' if ok else 'не удалось ❌'}")
             logging.info(f"health_check: kicked from {chat.group_id}, removed={ok}")
         except TelegramBadRequest as e:
             if "chat not found" in e.message.lower():
                 ok = await ChatRepository.remove_chat(chat.group_id)
-                removed.append(f"🗑 {label} — {'видалено ✅' if ok else 'не вдалось ❌'}")
+                removed.append(f"🗑 {label} — {'удалено ✅' if ok else 'не удалось ❌'}")
                 logging.info(f"health_check: not found {chat.group_id}, removed={ok}")
             else:
                 errors.append(f"⚠️ {label}: {escape(e.message)}")
@@ -58,7 +58,7 @@ async def check_bot_membership(bot, chat_id: int) -> None:
     logging.info(f"health_check: {total} chats checked, {len(issues)} issues")
 
     if issues:
-        lines = [f"<b>🔍 Health check: {len(issues)} проблем з {total} груп</b>", ""] + issues
+        lines = [f"<b>🔍 Health check: {len(issues)} проблем из {total} групп</b>", ""] + issues
         chunk, size = [], 0
         for line in lines:
             if size + len(line) + 1 > 4000 and chunk:

@@ -22,11 +22,11 @@ router.callback_query.middleware(IsGroupAdmin())
 async def start(message: types.Message, bot: Bot):
     title = escape(message.chat.title or str(message.chat.id))
     if await ChatRepository.get_chat(message.chat.id):
-        await message.answer(f"Група <b>{title}</b> вже є в базі.")
+        await message.answer(f"Группа <b>{title}</b> уже есть в базе.")
     elif await register_chat(bot, message.chat.id, message.chat.title):
         await message.answer(
-            f"✅ Група <b>{title}</b> (<code>{message.chat.id}</code>) додана до бази!\n"
-            f"Призначте категорії в боті: «📋 Переглянути групи» → «⚙️ Налаштування»."
+            f"✅ Группа <b>{title}</b> (<code>{message.chat.id}</code>) добавлена в базу!\n"
+            f"Назначьте категории в боте: «📋 Просмотреть группы» → «⚙️ Настройки»."
         )
     else:
-        await message.answer("❌ Помилка при додаванні групи.")
+        await message.answer("❌ Ошибка при добавлении группы.")

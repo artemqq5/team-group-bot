@@ -25,7 +25,7 @@ router = Router()
 
 @router.callback_query(MainMenuCallback.filter(F.action == "broadcast"))
 async def show_broadcast_menu(callback: CallbackQuery):
-    await edit_or_answer(callback, "📤 Розсилка:", reply_markup=kb_broadcast_menu())
+    await edit_or_answer(callback, "📤 Рассылка:", reply_markup=kb_broadcast_menu())
     await callback.answer()
 
 
@@ -33,7 +33,7 @@ async def show_broadcast_menu(callback: CallbackQuery):
 async def start_create_message(callback: CallbackQuery, state: FSMContext):
     admin = await AdminRepository.is_admin(callback.from_user.id)
     await state.set_state(SendMessageState.category)
-    await edit_or_answer(callback, "Оберіть категорію групи:", reply_markup=kb_messaging_category(admin))
+    await edit_or_answer(callback, "Выберите категорию группы:", reply_markup=kb_messaging_category(admin))
     await callback.answer()
 
 
@@ -41,11 +41,11 @@ async def start_create_message(callback: CallbackQuery, state: FSMContext):
 async def show_broadcast_history(callback: CallbackQuery):
     records = await BroadcastRepository.get_last_broadcasts(20) or []
     if not records:
-        await edit_or_answer(callback, "Історія розсилок порожня.", reply_markup=kb_back_to_main())
+        await edit_or_answer(callback, "История рассылок пуста.", reply_markup=kb_back_to_main())
     else:
         await edit_or_answer(
             callback,
-            f"📜 Останні {len(records)} розсилок:",
+            f"📜 Последние {len(records)} рассылок:",
             reply_markup=kb_broadcast_history(records)
         )
     await callback.answer()
@@ -56,21 +56,21 @@ async def view_broadcast_record(callback: CallbackQuery, callback_data: Broadcas
     records = await BroadcastRepository.get_last_broadcasts(20) or []
     record = next((r for r in records if r.id == callback_data.record_id), None)
     if not record:
-        await callback.answer("Запис не знайдено", show_alert=True)
+        await callback.answer("Запись не найдена", show_alert=True)
         return
     date_str = record.sent_at.strftime("%d.%m.%Y %H:%M")
     extras = []
     if record.has_photo:
-        extras.append("фото/відео")
+        extras.append("фото/видео")
     if record.has_buttons:
         extras.append("кнопки")
-    extras_text = " + " + ", ".join(extras) if extras else "тільки текст"
+    extras_text = " + " + ", ".join(extras) if extras else "только текст"
     text = (
-        f"<b>Розсилка від {date_str}</b>\n\n"
-        f"Адмін: <b>{record.admin_name}</b> (<code>{record.admin_id}</code>)\n"
-        f"Категорія: <b>{record.category}</b>\n"
-        f"Відправлено в: <b>{record.groups_count}</b> груп\n"
-        f"Медіа: {extras_text}\n\n"
+        f"<b>Рассылка от {date_str}</b>\n\n"
+        f"Админ: <b>{record.admin_name}</b> (<code>{record.admin_id}</code>)\n"
+        f"Категория: <b>{record.category}</b>\n"
+        f"Отправлено в: <b>{record.groups_count}</b> групп\n"
+        f"Медиа: {extras_text}\n\n"
         f"<b>Текст:</b>\n{record.message_text or '—'}"
     )
     await edit_or_answer(callback, text, reply_markup=kb_broadcast_history_back())
@@ -81,7 +81,7 @@ async def view_broadcast_record(callback: CallbackQuery, callback_data: Broadcas
 async def set_category(callback: CallbackQuery, callback_data: BroadcastCategoryCallback, state: FSMContext):
     await state.update_data(category=callback_data.category)
     await state.set_state(SendMessageState.message)
-    await edit_or_answer(callback, "Введіть текст для розсилки:", reply_markup=kb_cancel())
+    await edit_or_answer(callback, "Введите текст для рассылки:", reply_markup=kb_cancel())
     await callback.answer()
 
 
@@ -89,7 +89,7 @@ async def set_category(callback: CallbackQuery, callback_data: BroadcastCategory
 async def set_message(message: types.Message, state: FSMContext):
     await state.update_data(message=message.html_text, buttons=[])
     await state.set_state(SendMessageState.button)
-    await message.answer("Бажаєте додати кнопку?", reply_markup=kb_yes_skip_cancel())
+    await message.answer("Хотите добавить кнопку?", reply_markup=kb_yes_skip_cancel())
 
 
 @router.callback_query(BroadcastActionCallback.filter(F.action.in_(["yes", "skip"])), SendMessageState.button)
@@ -98,7 +98,7 @@ async def set_button(callback: CallbackQuery, callback_data: BroadcastActionCall
         await state.set_state(SendMessageState.photo)
         await edit_or_answer(
             callback,
-            "Відправте фото, відео або гіфку (стиснений формат, не файл):",
+            "Отправьте фото, видео или гифку (сжатый формат, не файл):",
             reply_markup=kb_skip_cancel()
         )
         await callback.answer()
@@ -108,7 +108,7 @@ async def set_button(callback: CallbackQuery, callback_data: BroadcastActionCall
     await _add_new_button(state)
     await edit_or_answer(
         callback,
-        "Текст кнопки (до 50 символів) або пропустіть:",
+        "Текст кнопки (до 50 символов) или пропустите:",
         reply_markup=kb_skip_cancel()
     )
     await callback.answer()
@@ -117,18 +117,18 @@ async def set_button(callback: CallbackQuery, callback_data: BroadcastActionCall
 @router.message(SendMessageState.buttonText)
 async def set_button_text(message: types.Message, state: FSMContext):
     if len(message.text) > 50:
-        await message.answer("До 50 символів!", reply_markup=kb_skip_cancel())
+        await message.answer("До 50 символов!", reply_markup=kb_skip_cancel())
         return
     await _set_text_last_button(state, message.text)
     await state.set_state(SendMessageState.buttonUrl)
-    await message.answer("Відправте URL куди перенаправити:", reply_markup=kb_cancel())
+    await message.answer("Отправьте URL, куда перенаправить:", reply_markup=kb_cancel())
 
 
 @router.callback_query(BroadcastActionCallback.filter(F.action == "skip"), SendMessageState.buttonText)
 async def skip_button_text(callback: CallbackQuery, state: FSMContext):
     await _set_text_last_button(state, "skip")
     await state.set_state(SendMessageState.buttonUrl)
-    await edit_or_answer(callback, "Відправте URL куди перенаправити:", reply_markup=kb_cancel())
+    await edit_or_answer(callback, "Отправьте URL, куда перенаправить:", reply_markup=kb_cancel())
     await callback.answer()
 
 
@@ -137,13 +137,13 @@ async def set_button_url(message: types.Message, state: FSMContext):
     url = message.text.strip()
     if not url.startswith(("http://", "https://")):
         await message.answer(
-            "URL має починатись з <code>http://</code> або <code>https://</code>",
+            "URL должен начинаться с <code>http://</code> или <code>https://</code>",
             reply_markup=kb_cancel()
         )
         return
     await _set_url_last_button(state, url)
     await state.set_state(SendMessageState.buttonRepeat)
-    await message.answer("Бажаєте додати ще кнопку?", reply_markup=kb_yes_skip_cancel())
+    await message.answer("Хотите добавить ещё кнопку?", reply_markup=kb_yes_skip_cancel())
 
 
 @router.callback_query(BroadcastActionCallback.filter(F.action.in_(["yes", "skip"])), SendMessageState.buttonRepeat)
@@ -151,13 +151,13 @@ async def set_button_repeat(callback: CallbackQuery, callback_data: BroadcastAct
     data = await state.get_data()
 
     if len(data.get("buttons", [])) >= 10:
-        await callback.answer("Вже 10 кнопок — це ліміт", show_alert=True)
+        await callback.answer("Уже 10 кнопок — это лимит", show_alert=True)
 
     if callback_data.action == "skip" or len(data.get("buttons", [])) >= 10:
         await state.set_state(SendMessageState.photo)
         await edit_or_answer(
             callback,
-            "Відправте фото, відео або гіфку (стиснений формат, не файл):",
+            "Отправьте фото, видео или гифку (сжатый формат, не файл):",
             reply_markup=kb_skip_cancel()
         )
         await callback.answer()
@@ -167,7 +167,7 @@ async def set_button_repeat(callback: CallbackQuery, callback_data: BroadcastAct
     await _add_new_button(state)
     await edit_or_answer(
         callback,
-        "Текст кнопки (до 50 символів) або пропустіть:",
+        "Текст кнопки (до 50 символов) или пропустите:",
         reply_markup=kb_skip_cancel()
     )
     await callback.answer()
@@ -184,7 +184,7 @@ async def skip_photo(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     kb = _build_buttons_markup(data)
     await callback.message.answer(data["message"], reply_markup=kb)
-    await callback.message.answer("Все окей?", reply_markup=kb_send_cancel())
+    await callback.message.answer("Всё окей?", reply_markup=kb_send_cancel())
     await callback.answer()
 
 
@@ -203,9 +203,9 @@ async def send_broadcast(callback: CallbackQuery, state: FSMContext):
     eta = estimate_seconds(len(chats))
     await edit_or_answer(
         callback,
-        f"📤 Розсилка запущена\n\n"
-        f"Груп: <b>{len(chats)}</b>\n"
-        f"Орієнтовний час: <b>{eta}</b>",
+        f"📤 Рассылка запущена\n\n"
+        f"Групп: <b>{len(chats)}</b>\n"
+        f"Ориентировочное время: <b>{eta}</b>",
         reply_markup=None
     )
     await callback.answer()
@@ -235,14 +235,14 @@ async def _run_broadcast(bot: Bot, chat_id: int, data: dict, admin_id: str, admi
         )
         await bot.send_message(
             chat_id=chat_id,
-            text=f"✅ Розсилку завершено\n\nДоставлено: <b>{count}</b> / {total} груп",
+            text=f"✅ Рассылка завершена\n\nДоставлено: <b>{count}</b> / {total} групп",
             reply_markup=kb_back_to_main()
         )
     except Exception as e:
         logging.error(f"_run_broadcast: {e}")
         await bot.send_message(
             chat_id=chat_id,
-            text="❌ Помилка під час розсилки. Перевірте логи.",
+            text="❌ Ошибка во время рассылки. Проверьте логи.",
             reply_markup=kb_back_to_main()
         )
 
@@ -267,7 +267,7 @@ async def _show_preview(message: types.Message, state: FSMContext):
         data = await state.get_data()
         await message.answer_video(data["video"], caption=data["message"], reply_markup=kb)
 
-    await message.answer("Все окей?", reply_markup=kb_send_cancel())
+    await message.answer("Всё окей?", reply_markup=kb_send_cancel())
 
 
 def _build_buttons_markup(data):

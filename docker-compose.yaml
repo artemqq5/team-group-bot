@@ -1,4 +1,27 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: team-group-bot-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1: під час initdb тимчасовий сервер слухає лише unix-сокет, TCP-перевірка його не пропустить
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   team-group-bot:
     build: .
     image: artemqq5/team-group-bot:latest
@@ -7,12 +30,16 @@ services:
     entrypoint: ["sh", "/entrypoint.sh"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8019:8019"
     volumes:
       - ./logs:/app/logs
       - ./entrypoint.sh:/entrypoint.sh
     networks:
+      - default
       - nginx-network
     restart: unless-stopped
     logging:

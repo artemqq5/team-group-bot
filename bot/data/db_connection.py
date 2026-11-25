@@ -12,6 +12,8 @@ engine = create_async_engine(
     os.getenv("DB_LINK_CONNECTION"),
     pool_pre_ping=True,
     pool_recycle=28000,
+    hide_parameters=True,  # щоб текст повідомлень не потрапляв у логи помилок
+    connect_args={"timeout": 3, "command_timeout": 30},
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

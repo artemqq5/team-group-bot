@@ -15,6 +15,8 @@ class ChatRepository:
     async def add_chat(group_id, title, datetime) -> Optional[ChatModel]:
         async with async_session() as session:
             async with session.begin():
+                # PG: без NUL і не довше за varchar(255)
+                title = title.replace("\x00", "")[:255] if title else title
                 chat = ChatModel(group_id=str(group_id), title=title, time=datetime)
                 session.add(chat)
                 await session.flush()

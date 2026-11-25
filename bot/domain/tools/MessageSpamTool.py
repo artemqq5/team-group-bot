@@ -43,7 +43,7 @@ def estimate_seconds(groups_count: int) -> str:
         return f"~{secs} сек"
     minutes = secs // 60
     remainder = secs % 60
-    return f"~{minutes} хв {remainder} сек" if remainder else f"~{minutes} хв"
+    return f"~{minutes} мин {remainder} сек" if remainder else f"~{minutes} мин"
 
 
 async def _send_message(bot: Bot, data: dict, group_id):

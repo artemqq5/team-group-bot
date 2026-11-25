@@ -8,5 +8,13 @@ Dockerfile
 *.log
 .idea/
 .vscode/
-.env
 private_cfg.py
+# секрети і дані не потрапляють в образ
+**/.env
+**/.env.*
+!.env.example
+prod/
+pgdata/
+**/pgdata/
+*.sql
+*.dump

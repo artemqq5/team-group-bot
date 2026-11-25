@@ -89,52 +89,72 @@ class BroadcastHistoryCallback(CallbackData, prefix="bh"):
     record_id: int = 0
 
 
+class McpMenuCallback(CallbackData, prefix="mcp"):
+    action: str
+
+
+class McpCategoryCallback(CallbackData, prefix="mcc"):
+    category: str
+
+
+class McpKeyCallback(CallbackData, prefix="mck"):
+    key_id: int
+    action: str  # view | revoke | revoke_yes | hide
+
+
+class McpAuditCallback(CallbackData, prefix="mca"):
+    key_id: int  # 0 = відмови без ключа
+    page: int = 1
+    export: bool = False
+
+
 # ─── Main Menu ────────────────────────────────────────────────────────────────
 
 def kb_main(admin) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="📋 Переглянути групи", callback_data=MainMenuCallback(action="groups"))
-    kb.button(text="📤 Розсилка", callback_data=MainMenuCallback(action="broadcast"))
+    kb.button(text="📋 Просмотреть группы", callback_data=MainMenuCallback(action="groups"))
+    kb.button(text="📤 Рассылка", callback_data=MainMenuCallback(action="broadcast"))
     if admin.role == TypeOfAdmins.ADMIN.value:
         kb.button(text="📊 Статистика", callback_data=MainMenuCallback(action="stats"))
-        kb.button(text="👥 Адміни", callback_data=MainMenuCallback(action="admins"))
+        kb.button(text="👥 Админы", callback_data=MainMenuCallback(action="admins"))
+        kb.button(text="🔑 Ключи MCP", callback_data=McpMenuCallback(action="list"))
     kb.adjust(1)
     return kb.as_markup()
 
 
 def kb_back_to_main() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="↩️ Головне меню", callback_data=MainMenuCallback(action="back"))
+    kb.button(text="↩️ Главное меню", callback_data=MainMenuCallback(action="back"))
     return kb.as_markup()
 
 
 def kb_cancel() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="✖️ Скасувати", callback_data=MainMenuCallback(action="cancel"))
+    kb.button(text="✖️ Отменить", callback_data=MainMenuCallback(action="cancel"))
     return kb.as_markup()
 
 
 def kb_skip_cancel() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="⏭ Пропустити", callback_data=BroadcastActionCallback(action="skip"))
-    kb.button(text="✖️ Скасувати", callback_data=MainMenuCallback(action="cancel"))
+    kb.button(text="⏭ Пропустить", callback_data=BroadcastActionCallback(action="skip"))
+    kb.button(text="✖️ Отменить", callback_data=MainMenuCallback(action="cancel"))
     kb.adjust(1)
     return kb.as_markup()
 
 
 def kb_yes_skip_cancel() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Так", callback_data=BroadcastActionCallback(action="yes"))
-    kb.button(text="⏭ Пропустити", callback_data=BroadcastActionCallback(action="skip"))
-    kb.button(text="✖️ Скасувати", callback_data=MainMenuCallback(action="cancel"))
+    kb.button(text="✅ Да", callback_data=BroadcastActionCallback(action="yes"))
+    kb.button(text="⏭ Пропустить", callback_data=BroadcastActionCallback(action="skip"))
+    kb.button(text="✖️ Отменить", callback_data=MainMenuCallback(action="cancel"))
     kb.adjust(2, 1)
     return kb.as_markup()
 
 
 def kb_send_cancel() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="📤 Відправити", callback_data=BroadcastActionCallback(action="send"))
-    kb.button(text="✖️ Скасувати", callback_data=MainMenuCallback(action="cancel"))
+    kb.button(text="📤 Отправить", callback_data=BroadcastActionCallback(action="send"))
+    kb.button(text="✖️ Отменить", callback_data=MainMenuCallback(action="cancel"))
     kb.adjust(1)
     return kb.as_markup()
 
@@ -144,11 +164,11 @@ def kb_send_cancel() -> InlineKeyboardMarkup:
 def kb_type_group(admin) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     if admin.role == TypeOfAdmins.ADMIN.value:
-        kb.button(text="🔘 Невизначені групи", callback_data=ShowTypeCallback(chat_type="unspecified"))
+        kb.button(text="🔘 Неопределённые группы", callback_data=ShowTypeCallback(chat_type="unspecified"))
     for chat_type in access_admin_to_chat[admin.role]:
         kb.button(text=chat_type, callback_data=ShowTypeCallback(chat_type=chat_type))
     kb.adjust(2, repeat=True)
-    kb.row(InlineKeyboardButton(text="↩️ Головне меню", callback_data=MainMenuCallback(action="back").pack()))
+    kb.row(InlineKeyboardButton(text="↩️ Главное меню", callback_data=MainMenuCallback(action="back").pack()))
     return kb.as_markup()
 
 
@@ -201,7 +221,7 @@ def generate_pagination_groups(current_page: int, groups, bulk_button: bool = Fa
     )
     if bulk_button:
         kb.row(InlineKeyboardButton(
-            text="☑️ Вибрати кілька",
+            text="☑️ Выбрать несколько",
             callback_data=BulkActionCallback(action="start").pack()
         ))
     kb.row(InlineKeyboardButton(
@@ -232,11 +252,11 @@ def kb_bulk_select(current_page: int, groups, selected: set[str]) -> InlineKeybo
 
     kb.row(
         InlineKeyboardButton(
-            text="☑️ Вся сторінка",
+            text="☑️ Вся страница",
             callback_data=BulkActionCallback(action="select_page", page=current_page).pack()
         ),
         InlineKeyboardButton(
-            text="🧹 Зняти все",
+            text="🧹 Снять всё",
             callback_data=BulkActionCallback(action="clear", page=current_page).pack()
         ),
     )
@@ -259,7 +279,7 @@ def kb_bulk_select(current_page: int, groups, selected: set[str]) -> InlineKeybo
         callback_data=BulkActionCallback(action="move", page=current_page).pack()
     ))
     kb.row(InlineKeyboardButton(
-        text="✖️ Скасувати",
+        text="✖️ Отменить",
         callback_data=BulkActionCallback(action="cancel").pack()
     ))
     return kb.as_markup()
@@ -272,11 +292,11 @@ def kb_bulk_categories(selected_cats: set[str], page: int) -> InlineKeyboardMark
         kb.button(text=f"{prefix} {label}", callback_data=BulkCategoryCallback(category=cat))
     kb.adjust(2)
     kb.row(InlineKeyboardButton(
-        text="✅ Підтвердити",
+        text="✅ Подтвердить",
         callback_data=BulkActionCallback(action="confirm", page=page).pack()
     ))
     kb.row(InlineKeyboardButton(
-        text="↩️ Назад до вибору",
+        text="↩️ Назад к выбору",
         callback_data=BulkActionCallback(action="back_select", page=page).pack()
     ))
     return kb.as_markup()
@@ -284,8 +304,8 @@ def kb_bulk_categories(selected_cats: set[str], page: int) -> InlineKeyboardMark
 
 def kb_bulk_done() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="🔘 До невизначених", callback_data=ShowTypeCallback(chat_type="unspecified"))
-    kb.button(text="↩️ Головне меню", callback_data=MainMenuCallback(action="back"))
+    kb.button(text="🔘 К неопределённым", callback_data=ShowTypeCallback(chat_type="unspecified"))
+    kb.button(text="↩️ Главное меню", callback_data=MainMenuCallback(action="back"))
     kb.adjust(1)
     return kb.as_markup()
 
@@ -310,9 +330,9 @@ CATEGORY_LABELS = {
 
 def kb_group_info(group_id: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="⚙️ Налаштування", callback_data=GroupSettingsCallback(group_id=group_id))
+    kb.button(text="⚙️ Настройки", callback_data=GroupSettingsCallback(group_id=group_id))
     kb.adjust(1)
-    kb.row(InlineKeyboardButton(text="↩️ До списку", callback_data=MainMenuCallback(action="groups").pack()))
+    kb.row(InlineKeyboardButton(text="↩️ К списку", callback_data=MainMenuCallback(action="groups").pack()))
     return kb.as_markup()
 
 
@@ -327,11 +347,11 @@ def kb_group_settings(chat: ChatModel) -> InlineKeyboardMarkup:
         )
     kb.adjust(2)
     kb.row(InlineKeyboardButton(
-        text="🗑 Видалити групу",
+        text="🗑 Удалить группу",
         callback_data=GroupDeleteCallback(group_id=str(chat.group_id), confirmed=False).pack()
     ))
     kb.row(InlineKeyboardButton(
-        text="↩️ До групи",
+        text="↩️ К группе",
         callback_data=GroupCallback(id=str(chat.group_id)).pack()
     ))
     return kb.as_markup()
@@ -339,7 +359,7 @@ def kb_group_settings(chat: ChatModel) -> InlineKeyboardMarkup:
 
 def kb_group_delete_confirm(group_id: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Так, видалити", callback_data=GroupDeleteCallback(group_id=group_id, confirmed=True))
+    kb.button(text="✅ Да, удалить", callback_data=GroupDeleteCallback(group_id=group_id, confirmed=True))
     kb.button(text="↩️ Назад", callback_data=GroupSettingsCallback(group_id=group_id))
     kb.adjust(2)
     return kb.as_markup()
@@ -349,10 +369,10 @@ def kb_group_delete_confirm(group_id: str) -> InlineKeyboardMarkup:
 
 def kb_admins_menu() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="📋 Список адмінів", callback_data=AdminMenuCallback(action="list"))
-    kb.button(text="➕ Додати адміна", callback_data=AdminMenuCallback(action="add"))
+    kb.button(text="📋 Список админов", callback_data=AdminMenuCallback(action="list"))
+    kb.button(text="➕ Добавить админа", callback_data=AdminMenuCallback(action="add"))
     kb.adjust(2)
-    kb.row(InlineKeyboardButton(text="⬅️ Головне меню", callback_data=MainMenuCallback(action="back").pack()))
+    kb.row(InlineKeyboardButton(text="⬅️ Главное меню", callback_data=MainMenuCallback(action="back").pack()))
     return kb.as_markup()
 
 
@@ -368,8 +388,8 @@ def kb_admins_list(admins: list) -> InlineKeyboardMarkup:
 
 def kb_admin_actions(telegram_id: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="✏️ Змінити роль", callback_data=AdminActionCallback(telegram_id=telegram_id, action="change_role"))
-    kb.button(text="🗑 Видалити", callback_data=AdminActionCallback(telegram_id=telegram_id, action="delete"))
+    kb.button(text="✏️ Изменить роль", callback_data=AdminActionCallback(telegram_id=telegram_id, action="change_role"))
+    kb.button(text="🗑 Удалить", callback_data=AdminActionCallback(telegram_id=telegram_id, action="delete"))
     kb.adjust(2)
     kb.row(InlineKeyboardButton(text="↩️ Назад", callback_data=AdminMenuCallback(action="list").pack()))
     return kb.as_markup()
@@ -377,7 +397,7 @@ def kb_admin_actions(telegram_id: str) -> InlineKeyboardMarkup:
 
 def kb_admin_delete_confirm(telegram_id: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Так, видалити", callback_data=AdminActionCallback(telegram_id=telegram_id, action="confirm_delete"))
+    kb.button(text="✅ Да, удалить", callback_data=AdminActionCallback(telegram_id=telegram_id, action="confirm_delete"))
     kb.button(text="↩️ Назад", callback_data=AdminSelectCallback(telegram_id=telegram_id))
     kb.adjust(2)
     return kb.as_markup()
@@ -396,8 +416,8 @@ def kb_admin_roles(telegram_id: str) -> InlineKeyboardMarkup:
 
 def kb_broadcast_menu() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="📤 Нова розсилка", callback_data=BroadcastActionCallback(action="new"))
-    kb.button(text="📜 Історія розсилок", callback_data=BroadcastHistoryCallback(action="list", record_id=0))
+    kb.button(text="📤 Новая рассылка", callback_data=BroadcastActionCallback(action="new"))
+    kb.button(text="📜 История рассылок", callback_data=BroadcastHistoryCallback(action="list", record_id=0))
     kb.adjust(2)
     kb.row(InlineKeyboardButton(text="↩️ Назад", callback_data=MainMenuCallback(action="back").pack()))
     return kb.as_markup()
@@ -407,7 +427,7 @@ def kb_broadcast_history(records: list) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for r in records:
         date_str = r.sent_at.strftime("%d.%m %H:%M")
-        label = f"{date_str} | {r.category} | {r.groups_count} груп"
+        label = f"{date_str} | {r.category} | {r.groups_count} групп"
         kb.button(text=label, callback_data=BroadcastHistoryCallback(action="view", record_id=r.id))
     kb.adjust(1)
     kb.row(InlineKeyboardButton(text="↩️ Назад", callback_data=MainMenuCallback(action="broadcast").pack()))
@@ -416,6 +436,85 @@ def kb_broadcast_history(records: list) -> InlineKeyboardMarkup:
 
 def kb_broadcast_history_back() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="↩️ До списку", callback_data=BroadcastHistoryCallback(action="list", record_id=0))
+    kb.button(text="↩️ К списку", callback_data=BroadcastHistoryCallback(action="list", record_id=0))
     kb.adjust(1)
+    return kb.as_markup()
+
+
+# ─── MCP keys ─────────────────────────────────────────────────────────────────
+
+def kb_mcp_keys(keys) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for k in keys:
+        status = "🚫" if k.revoked else "🟢"
+        kb.button(text=f"{status} {k.label} ({k.token_prefix}…)", callback_data=McpKeyCallback(key_id=k.id, action="view"))
+    kb.button(text="➕ Создать ключ", callback_data=McpMenuCallback(action="create"))
+    kb.button(text="🚫 Отказы без ключа", callback_data=McpAuditCallback(key_id=0))
+    kb.button(text="↩️ Главное меню", callback_data=MainMenuCallback(action="back"))
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def kb_mcp_categories(selected: list) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    all_on = TypeOfChats.ALL.value in selected
+    kb.button(text=f"{'✅' if all_on else '❌'} Все группы",
+              callback_data=McpCategoryCallback(category=TypeOfChats.ALL.value))
+    for cat, label in CATEGORY_LABELS.items():
+        kb.button(text=f"{'✅' if cat in selected else '❌'} {label}", callback_data=McpCategoryCallback(category=cat))
+    kb.adjust(1, 2)
+    kb.row(InlineKeyboardButton(text="➡️ Далее", callback_data=McpMenuCallback(action="next").pack()))
+    kb.row(InlineKeyboardButton(text="✖️ Отменить", callback_data=McpMenuCallback(action="list").pack()))
+    return kb.as_markup()
+
+
+def kb_mcp_confirm() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Создать ключ", callback_data=McpMenuCallback(action="confirm"))
+    kb.button(text="↩️ Назад", callback_data=McpMenuCallback(action="back_cats"))
+    kb.button(text="✖️ Отменить", callback_data=McpMenuCallback(action="list"))
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def kb_mcp_secret(key_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Я сохранил — скрыть", callback_data=McpKeyCallback(key_id=key_id, action="hide"))
+    return kb.as_markup()
+
+
+def kb_mcp_key_view(key) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📜 Журнал", callback_data=McpAuditCallback(key_id=key.id))
+    if not key.revoked:
+        kb.button(text="🚫 Отозвать", callback_data=McpKeyCallback(key_id=key.id, action="revoke"))
+    kb.button(text="↩️ Назад", callback_data=McpMenuCallback(action="list"))
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def kb_mcp_revoke_confirm(key_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да, отозвать", callback_data=McpKeyCallback(key_id=key_id, action="revoke_yes"))
+    kb.button(text="↩️ Назад", callback_data=McpKeyCallback(key_id=key_id, action="view"))
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def kb_mcp_audit(key_id: int, page: int, has_next: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    nav = []
+    if page > 1:
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=McpAuditCallback(key_id=key_id, page=page - 1).pack()))
+    nav.append(InlineKeyboardButton(text=f"{page}", callback_data="page_noop"))
+    if has_next:
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=McpAuditCallback(key_id=key_id, page=page + 1).pack()))
+    kb.row(*nav)
+    if key_id:
+        kb.row(InlineKeyboardButton(text="📥 Экспорт CSV",
+                                    callback_data=McpAuditCallback(key_id=key_id, export=True).pack()))
+        back = McpKeyCallback(key_id=key_id, action="view").pack()
+    else:
+        back = McpMenuCallback(action="list").pack()
+    kb.row(InlineKeyboardButton(text="↩️ Назад", callback_data=back))
     return kb.as_markup()

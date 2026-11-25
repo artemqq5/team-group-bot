@@ -1,16 +1,16 @@
-VIEW_ALL_GROUP = "Переглянути групи"
-MESSAGING_GROP = "Розсилка"
-BUG_REPORT = "Перевірити на баги"
+VIEW_ALL_GROUP = "Просмотреть группы"
+MESSAGING_GROP = "Рассылка"
+BUG_REPORT = "Проверить на баги"
 STATISTIC = "Статистика"
 
-SEND_MESSAGE_FROM_GROUP = "Перешли повідомлення з групи яку ти хочеш додати"
-CANCEL = "Відмінити"
-CANCEL_SUCCESS = "Операція скасована"
-SKIP = "Пропустити"
-YES = "Так!"
+SEND_MESSAGE_FROM_GROUP = "Перешли сообщение из группы, которую ты хочешь добавить"
+CANCEL = "Отменить"
+CANCEL_SUCCESS = "Операция отменена"
+SKIP = "Пропустить"
+YES = "Да!"
 
-UNSPECIFIED_GROUPS = "Невизначені групи"
+UNSPECIFIED_GROUPS = "Неопределённые группы"
 
-SEND = "Відправити"
+SEND = "Отправить"
 
 

@@ -8,7 +8,7 @@ from bot.data.repositories.ChatRepository import ChatRepository
 from bot.data.repositories.UserRepository import UserRepository
 from bot.domain.filters.IsGroup import IsGropFilter
 from bot.domain.middlewares.IsPrivateChatAdmin import IsPrivateChatAdmin
-from bot.domain.routers.admin.chat.menu import show_, bulk_, message_, statistic_, admins_, groups_
+from bot.domain.routers.admin.chat.menu import show_, bulk_, message_, statistic_, admins_, groups_, mcp_keys_
 from bot.domain.tools.edit_helper import edit_or_answer
 from bot.presentation.keyboard.admin_ import MainMenuCallback, kb_main
 
@@ -20,6 +20,7 @@ router.include_routers(
     statistic_.router,
     admins_.router,
     groups_.router,
+    mcp_keys_.router,
 )
 
 router.message.middleware(IsPrivateChatAdmin())
@@ -31,10 +32,10 @@ async def _main_menu_text() -> str:
     users_count = await UserRepository.count_users_total() or 0
     admins_list = await AdminRepository.get_all_admins() or []
     return (
-        "<b>Привіт! Це бот для розсилки сповіщень.</b>\n\n"
-        f"<b>{len(chats_list)} груп</b>  |  <b>{len(admins_list)} адмінів</b>  |  <b>{users_count} юзерів</b>\n\n"
-        "Щоб додати групу — додайте бота в групу (вона з'явиться автоматично) "
-        "або напишіть /start у групі."
+        "<b>Привет! Это бот для рассылки уведомлений.</b>\n\n"
+        f"<b>{len(chats_list)} групп</b>  |  <b>{len(admins_list)} админов</b>  |  <b>{users_count} юзеров</b>\n\n"
+        "Чтобы добавить группу — добавьте бота в группу (она появится автоматически) "
+        "или напишите /start в группе."
     )
 
 

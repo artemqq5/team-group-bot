@@ -34,16 +34,16 @@ async def bot_added_to_group(event: ChatMemberUpdated, bot: Bot):
 
     title = escape(chat.title or str(chat.id))
     if await ChatRepository.get_chat(chat.id):
-        text = f"Група <b>{title}</b> вже є в базі."
+        text = f"Группа <b>{title}</b> уже есть в базе."
     elif await register_chat(bot, chat.id, chat.title):
         logging.info(f"group auto-added: {chat.id} by {event.from_user.id}")
         text = (
-            f"✅ Група <b>{title}</b> (<code>{chat.id}</code>) додана до бази!\n\n"
-            f"Категорії ще не призначені. Відкрийте групу через «📋 Переглянути групи» → "
-            f"«⚙️ Налаштування», щоб увімкнути потрібні категорії."
+            f"✅ Группа <b>{title}</b> (<code>{chat.id}</code>) добавлена в базу!\n\n"
+            f"Категории ещё не назначены. Откройте группу через «📋 Просмотреть группы» → "
+            f"«⚙️ Настройки», чтобы включить нужные категории."
         )
     else:
-        text = f"❌ Помилка при додаванні групи <b>{title}</b>."
+        text = f"❌ Ошибка при добавлении группы <b>{title}</b>."
 
     try:
         await bot.send_message(event.from_user.id, text)

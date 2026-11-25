@@ -24,6 +24,6 @@ async def update_chat(message: Message, state: FSMContext):
         logging.warning(f"update_chat: invalid argument — {e}")
 
     if await ChatRepository.update_chat_type(message.chat.id, chat_type, available):
-        await message.answer(f"The group updated its status {chat_type} on {available}")
+        await message.answer(f"Группа обновила статус {chat_type} на {available}")
     else:
-        await message.answer(f"Error updating the status, maybe you are changing to the same one")
+        await message.answer(f"Ошибка обновления статуса, возможно, вы меняете на тот же")

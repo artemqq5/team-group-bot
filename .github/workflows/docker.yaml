@@ -28,9 +28,12 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: true
+          # публікуємо лише з main (PR і dev тільки збираються); sha-тег незмінний — для відкату
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           platforms: linux/amd64
-          tags: artemqq5/team-group-bot:latest
+          tags: |
+            artemqq5/team-group-bot:latest
+            artemqq5/team-group-bot:${{ github.sha }}
 
 # black ./app
 # autoflake --check --remove-all-unused-imports --recursive --in-place app --exclude=venv

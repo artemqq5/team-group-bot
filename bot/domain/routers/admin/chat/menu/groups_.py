@@ -14,7 +14,7 @@ async def handle_forwarded_group(message: Message, bot: Bot):
     chat = message.forward_from_chat
     if chat.type not in ("group", "supergroup"):
         await message.answer(
-            "Це не групове повідомлення. Перешли повідомлення з потрібної групи.",
+            "Это не сообщение из группы. Перешли сообщение из нужной группы.",
             reply_markup=kb_back_to_main()
         )
         return
@@ -22,7 +22,7 @@ async def handle_forwarded_group(message: Message, bot: Bot):
     existing = await ChatRepository.get_chat(chat.id)
     if existing:
         await message.answer(
-            f"Група <b>{chat.title}</b> вже є в базі.",
+            f"Группа <b>{chat.title}</b> уже есть в базе.",
             reply_markup=kb_back_to_main()
         )
         return
@@ -32,15 +32,15 @@ async def handle_forwarded_group(message: Message, bot: Bot):
         member = await bot.get_chat_member(chat.id, me.id)
         if member.status not in ("member", "administrator"):
             await message.answer(
-                f"Бот не є учасником групи <b>{chat.title}</b>. "
-                f"Спочатку додайте бота в групу.",
+                f"Бот не является участником группы <b>{chat.title}</b>. "
+                f"Сначала добавьте бота в группу.",
                 reply_markup=kb_back_to_main()
             )
             return
     except Exception:
         await message.answer(
-            f"Не вдалося перевірити групу <b>{chat.title}</b>. "
-            f"Переконайтесь, що бот доданий туди.",
+            f"Не удалось проверить группу <b>{chat.title}</b>. "
+            f"Убедитесь, что бот добавлен туда.",
             reply_markup=kb_back_to_main()
         )
         return
@@ -58,13 +58,13 @@ async def handle_forwarded_group(message: Message, bot: Bot):
         except Exception:
             pass
         await message.answer(
-            f"✅ Група <b>{chat.title}</b> (<code>{chat.id}</code>) додана до бази!\n\n"
-            f"Категорії ще не призначені. Відкрийте групу через «📋 Переглянути групи» → "
-            f"«⚙️ Налаштування», щоб увімкнути потрібні категорії.",
+            f"✅ Группа <b>{chat.title}</b> (<code>{chat.id}</code>) добавлена в базу!\n\n"
+            f"Категории ещё не назначены. Откройте группу через «📋 Просмотреть группы» → "
+            f"«⚙️ Настройки», чтобы включить нужные категории.",
             reply_markup=kb_back_to_main()
         )
     else:
         await message.answer(
-            "❌ Помилка при додаванні групи.",
+            "❌ Ошибка при добавлении группы.",
             reply_markup=kb_back_to_main()
         )

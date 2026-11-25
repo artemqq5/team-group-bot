@@ -18,16 +18,16 @@ router = Router()
 async def _is_main_admin(callback: CallbackQuery) -> bool:
     admin = await AdminRepository.is_admin(callback.from_user.id)
     if not admin or admin.role != TypeOfAdmins.ADMIN.value:
-        await callback.answer("Немає доступу", show_alert=True)
+        await callback.answer("Нет доступа", show_alert=True)
         return False
     return True
 
 
 def _select_text(selected: set[str], total: int) -> str:
     return (
-        f"☑️ <b>Вибір невизначених груп</b>\n\n"
-        f"Вибрано: <b>{len(selected)}</b> з {total}\n"
-        f"Відмітьте групи і натисніть «Перенести»."
+        f"☑️ <b>Выбор неопределённых групп</b>\n\n"
+        f"Выбрано: <b>{len(selected)}</b> из {total}\n"
+        f"Отметьте группы и нажмите «Перенести»."
     )
 
 
@@ -48,7 +48,7 @@ async def bulk_start(callback: CallbackQuery, state: FSMContext):
         return
     chats = await ChatRepository.unspecified_chats() or []
     if not chats:
-        await edit_or_answer(callback, "Невизначених груп немає.", reply_markup=kb_back_to_main())
+        await edit_or_answer(callback, "Неопределённых групп нет.", reply_markup=kb_back_to_main())
         await callback.answer()
         return
     await state.update_data(chats=chats, list_type="unspecified", bulk_selected=[], bulk_cats=[])
@@ -101,13 +101,13 @@ async def bulk_move_or_back(callback: CallbackQuery, callback_data: BulkActionCa
     data = await state.get_data()
     selected = data.get("bulk_selected", [])
     if not selected:
-        await callback.answer("Нічого не вибрано", show_alert=True)
+        await callback.answer("Ничего не выбрано", show_alert=True)
         return
     cats = set(data.get("bulk_cats", []))
     await state.update_data(bulk_page=callback_data.page)
     await edit_or_answer(
         callback,
-        f"Оберіть категорії для <b>{len(selected)}</b> груп:",
+        f"Выберите категории для <b>{len(selected)}</b> групп:",
         reply_markup=kb_bulk_categories(cats, callback_data.page)
     )
     await callback.answer()
@@ -136,10 +136,10 @@ async def bulk_confirm(callback: CallbackQuery, state: FSMContext):
     selected = data.get("bulk_selected", [])
     cats = data.get("bulk_cats", [])
     if not selected:
-        await callback.answer("Нічого не вибрано", show_alert=True)
+        await callback.answer("Ничего не выбрано", show_alert=True)
         return
     if not cats:
-        await callback.answer("Оберіть хоча б одну категорію", show_alert=True)
+        await callback.answer("Выберите хотя бы одну категорию", show_alert=True)
         return
 
     moved = await ChatRepository.bulk_set_categories(selected, cats)
@@ -147,8 +147,8 @@ async def bulk_confirm(callback: CallbackQuery, state: FSMContext):
 
     labels = ", ".join(CATEGORY_LABELS[c] for c in CATEGORY_LABELS if c in cats)
     text = (
-        f"✅ Перенесено <b>{moved}</b> груп у: {labels}"
-        if moved else "❌ Не вдалося перенести групи."
+        f"✅ Перенесено <b>{moved}</b> групп в: {labels}"
+        if moved else "❌ Не удалось перенести группы."
     )
     await edit_or_answer(callback, text, reply_markup=kb_bulk_done())
     await callback.answer()
@@ -161,7 +161,7 @@ async def bulk_cancel(callback: CallbackQuery, state: FSMContext):
     await state.update_data(bulk_selected=[], bulk_cats=[])
     await edit_or_answer(
         callback,
-        f"Групи за типом <b>Невизначені групи</b> ({len(chats)}):",
+        f"Группы по типу <b>Неопределённые группы</b> ({len(chats)}):",
         reply_markup=generate_pagination_groups(current_page=1, groups=chats, bulk_button=True)
     )
     await callback.answer()

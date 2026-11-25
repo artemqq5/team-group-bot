@@ -16,13 +16,13 @@ router = Router()
 
 @router.callback_query(MainMenuCallback.filter(F.action == "admins"))
 async def show_admins_menu(callback: CallbackQuery):
-    await edit_or_answer(callback, "👥 Управління адмінами:", reply_markup=kb_admins_menu())
+    await edit_or_answer(callback, "👥 Управление админами:", reply_markup=kb_admins_menu())
     await callback.answer()
 
 
 @router.callback_query(AdminMenuCallback.filter(F.action == "back"))
 async def admins_back_to_menu(callback: CallbackQuery):
-    await edit_or_answer(callback, "👥 Управління адмінами:", reply_markup=kb_admins_menu())
+    await edit_or_answer(callback, "👥 Управление админами:", reply_markup=kb_admins_menu())
     await callback.answer()
 
 
@@ -30,9 +30,9 @@ async def admins_back_to_menu(callback: CallbackQuery):
 async def show_admins_list(callback: CallbackQuery):
     admins = await AdminRepository.get_all_admins()
     if not admins:
-        await callback.answer("Список адмінів порожній", show_alert=True)
+        await callback.answer("Список админов пуст", show_alert=True)
         return
-    await edit_or_answer(callback, "Список адмінів:", reply_markup=kb_admins_list(admins))
+    await edit_or_answer(callback, "Список админов:", reply_markup=kb_admins_list(admins))
     await callback.answer()
 
 
@@ -41,7 +41,7 @@ async def start_add_admin(callback: CallbackQuery, state: FSMContext):
     await state.set_state(ManageAdminState.telegram_id)
     await edit_or_answer(
         callback,
-        "Введіть <b>Telegram ID</b> нового адміна:",
+        "Введите <b>Telegram ID</b> нового админа:",
         reply_markup=kb_cancel()
     )
     await callback.answer()
@@ -51,15 +51,15 @@ async def start_add_admin(callback: CallbackQuery, state: FSMContext):
 async def get_admin_id(message: Message, state: FSMContext):
     tid = message.text.strip()
     if not tid.lstrip("-").isdigit():
-        await message.answer("Введіть числовий Telegram ID:", reply_markup=kb_cancel())
+        await message.answer("Введите числовой Telegram ID:", reply_markup=kb_cancel())
         return
     existing = await AdminRepository.is_admin(tid)
     if existing:
-        await message.answer(f"Адмін з ID <code>{tid}</code> вже існує.", reply_markup=kb_cancel())
+        await message.answer(f"Админ с ID <code>{tid}</code> уже существует.", reply_markup=kb_cancel())
         return
     await state.update_data(telegram_id=tid)
     await state.set_state(ManageAdminState.name)
-    await message.answer("Введіть ім'я адміна:", reply_markup=kb_cancel())
+    await message.answer("Введите имя админа:", reply_markup=kb_cancel())
 
 
 @router.message(ManageAdminState.name)
@@ -68,7 +68,7 @@ async def get_admin_name(message: Message, state: FSMContext):
     data = await state.get_data()
     await state.set_state(ManageAdminState.role)
     await message.answer(
-        "Оберіть роль адміна:",
+        "Выберите роль админа:",
         reply_markup=kb_admin_roles(data["telegram_id"])
     )
 
@@ -84,11 +84,11 @@ async def finish_add_admin(callback: CallbackQuery, callback_data: AdminRoleCall
     )
     if admin:
         text = (
-            f"✅ Адмін <b>{data['name']}</b> (<code>{data['telegram_id']}</code>) "
-            f"з роллю <b>{callback_data.role}</b> доданий."
+            f"✅ Админ <b>{data['name']}</b> (<code>{data['telegram_id']}</code>) "
+            f"с ролью <b>{callback_data.role}</b> добавлен."
         )
     else:
-        text = "❌ Помилка при додаванні адміна."
+        text = "❌ Ошибка при добавлении админа."
     await edit_or_answer(callback, text, reply_markup=kb_admins_menu())
     await callback.answer()
 
@@ -97,10 +97,10 @@ async def finish_add_admin(callback: CallbackQuery, callback_data: AdminRoleCall
 async def select_admin(callback: CallbackQuery, callback_data: AdminSelectCallback):
     admin = await AdminRepository.is_admin(callback_data.telegram_id)
     if not admin:
-        await callback.answer("Адмін не знайдений", show_alert=True)
+        await callback.answer("Админ не найден", show_alert=True)
         return
     info = (
-        f"👤 <b>{admin.name or 'Без імені'}</b>\n"
+        f"👤 <b>{admin.name or 'Без имени'}</b>\n"
         f"ID: <code>{admin.telegram_id}</code>\n"
         f"Роль: <b>{admin.role}</b>"
     )
@@ -112,7 +112,7 @@ async def select_admin(callback: CallbackQuery, callback_data: AdminSelectCallba
 async def change_admin_role(callback: CallbackQuery, callback_data: AdminActionCallback):
     await edit_or_answer(
         callback,
-        "Оберіть нову роль:",
+        "Выберите новую роль:",
         reply_markup=kb_admin_roles(callback_data.telegram_id)
     )
     await callback.answer()
@@ -127,14 +127,14 @@ async def set_admin_role(callback: CallbackQuery, callback_data: AdminRoleCallba
     if ok:
         admin = await AdminRepository.is_admin(callback_data.telegram_id)
         info = (
-            f"✅ Роль змінено на <b>{callback_data.role}</b>\n\n"
-            f"👤 <b>{admin.name or 'Без імені'}</b>\n"
+            f"✅ Роль изменена на <b>{callback_data.role}</b>\n\n"
+            f"👤 <b>{admin.name or 'Без имени'}</b>\n"
             f"ID: <code>{admin.telegram_id}</code>\n"
             f"Роль: <b>{admin.role}</b>"
         )
         await edit_or_answer(callback, info, reply_markup=kb_admin_actions(callback_data.telegram_id))
     else:
-        await edit_or_answer(callback, "❌ Помилка при зміні ролі.", reply_markup=kb_admins_menu())
+        await edit_or_answer(callback, "❌ Ошибка при смене роли.", reply_markup=kb_admins_menu())
     await callback.answer()
 
 
@@ -144,7 +144,7 @@ async def ask_delete_admin(callback: CallbackQuery, callback_data: AdminActionCa
     name = admin.name if admin else callback_data.telegram_id
     await edit_or_answer(
         callback,
-        f"Видалити адміна <b>{name}</b>?",
+        f"Удалить админа <b>{name}</b>?",
         reply_markup=kb_admin_delete_confirm(callback_data.telegram_id)
     )
     await callback.answer()
@@ -153,6 +153,6 @@ async def ask_delete_admin(callback: CallbackQuery, callback_data: AdminActionCa
 @router.callback_query(AdminActionCallback.filter(F.action == "confirm_delete"))
 async def confirm_delete_admin(callback: CallbackQuery, callback_data: AdminActionCallback):
     ok = await AdminRepository.remove_admin(callback_data.telegram_id)
-    text = "✅ Адміна видалено." if ok else "❌ Помилка при видаленні."
+    text = "✅ Админ удалён." if ok else "❌ Ошибка при удалении."
     await edit_or_answer(callback, text, reply_markup=kb_admins_menu())
     await callback.answer()

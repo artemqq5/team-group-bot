@@ -67,3 +67,7 @@ access_admin_to_chat = {
 
     TypeOfAdmins.ADMIN_MT.value: [TypeOfChats.PARTNER_MT.value],
 }
+
+
+# Ролі, яким дозволено керувати MCP-ключами та читати журнал
+MCP_KEY_ROLES = (TypeOfAdmins.ADMIN.value,)

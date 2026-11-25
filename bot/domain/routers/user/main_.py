@@ -25,7 +25,7 @@ async def all_message_handler(message: types.Message, bot: Bot):
     link_group = link_group.invite_link if link_group else None
 
     if await UserRepository.add_user(user_id, username, group_id, time_added, first_name, lang_code, chat_name, link_group):
-        user_text = (f"👤 Новий користувач доданий до бази!\nusername: <b>@{username}</b> | {time_added}"
+        user_text = (f"👤 Новый пользователь добавлен в базу!\nusername: <b>@{username}</b> | {time_added}"
                      f"\nID: <b>{user_id}</b>\ngroup: <b>{chat_name}</b>"
                      f"\nlink: <b>{link_group}</b>")
         await push_new_user_added(bot, user_text)
