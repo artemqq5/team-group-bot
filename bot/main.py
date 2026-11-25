@@ -16,6 +16,8 @@ import bot.domain.routers.admin.group.main_group as main_group_module
 from bot.data.repositories.AdminRepository import AdminRepository
 from bot.data.repositories import MessageRepository
 from bot.domain.middlewares.MessageCapture import MessageCapture
+from bot.data.repositories.McpOAuthRepository import McpOAuthRepository
+from bot.domain.mcp.oauth import router as oauth_router
 from bot.domain.mcp.server import router as mcp_router
 from bot.domain.routers import events_
 from bot.domain.routers.user import main_
@@ -78,6 +80,7 @@ async def _retention_loop():
             deleted = await MessageRepository.delete_old_messages(MESSAGE_RETENTION_DAYS, MESSAGE_KEEP_LAST_PER_CHAT)
             logging.info(f"retention: messages deleted={deleted}")
             await MessageRepository.delete_old_audit(AUDIT_RETENTION_DAYS)
+            await McpOAuthRepository.delete_expired(7)
         except Exception as e:
             logging.error(f"retention: {type(e).__name__}")
         await asyncio.sleep(24 * 3600)
@@ -105,6 +108,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(mcp_router)
+app.include_router(oauth_router)
 
 
 @app.post(WEBHOOK_PATH)

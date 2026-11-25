@@ -10,7 +10,8 @@ from tests.mcp_helpers import T0, call, hdr, make_client, make_key, rpc, seed_ch
 
 
 @pytest.fixture(autouse=True)
-def _reset():
+def _reset(monkeypatch):
+    monkeypatch.setenv("WEBHOOK_BASE_URL", "https://bot.example")
     server._rate.clear()
     server._agg.clear()
 
@@ -26,21 +27,24 @@ async def audit_rows():
         return list((await s.execute(select(McpAuditLogModel).order_by(McpAuditLogModel.id))).scalars())
 
 
+RM = "https://bot.example/.well-known/oauth-protected-resource"  # MCP_PATH=/mcp → префикс ""
 INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}}
 
 
 async def test_missing_token_401_and_aggregated(client):
     for _ in range(3):
         r = await client.post("/mcp", json=INIT)
-        assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+        assert r.status_code == 401
+        assert r.headers["www-authenticate"] == f'Bearer resource_metadata="{RM}"'  # без error: токен не предъявлен
     rows = await audit_rows()
     assert len(rows) == 1
     assert (rows[0].status, rows[0].reason, rows[0].key_id, rows[0].hits) == ("denied", "no_token", None, 3)
 
 
 async def test_wrong_token_401_audited(client):
-    r = await client.post("/mcp", json=INIT, headers=hdr("tgb_nope"))
+    r = await client.post("/mcp", json=INIT, headers=hdr("tgba_nope"))
     assert r.status_code == 401
+    assert r.headers["www-authenticate"] == f'Bearer resource_metadata="{RM}", error="invalid_token"'
     rows = await audit_rows()
     assert rows[0].reason == "invalid_token" and rows[0].key_id is None
 
@@ -67,10 +71,12 @@ async def test_expired_token_401(client):
 
 
 async def test_key_storage_hash_only(db):
-    token, key = await make_key(["all"])
+    token, key = await McpKeyRepository.create("lbl", "42", ["all"])
     assert token.startswith("tgb_") and key.token_prefix == token[:8]
     assert len(key.token_hash) == 64 and token not in key.token_hash
     assert key.expires_at is None
+    access, _ = await make_key(["all"])
+    assert access.startswith("tgba_")
 
 
 async def test_valid_ok_row_with_result_count(client):
@@ -204,7 +210,7 @@ async def test_audit_repo_pages(db):
     assert len(await McpAuditRepository.export_rows(7)) == 5
 
 
-# --- ключ у шляху /k/<token> ---
+# --- лише OAuth access-токен ---
 
 def _body(method, params=None, i=1):
     b = {"jsonrpc": "2.0", "id": i, "method": method}
@@ -213,74 +219,27 @@ def _body(method, params=None, i=1):
     return b
 
 
-async def test_path_token_works(client):
+async def test_k_path_removed(client):
     token, _ = await make_key(["all"])
-    await seed_chat("-100", "G", creo=True)
-    url = f"/mcp/k/{token}"
-    r = await client.post(url, json=INIT)
-    assert r.status_code == 200 and r.json()["result"]["serverInfo"]["name"] == "mt-chats"
-    r = await client.post(url, json=_body("tools/list"))
-    assert len(r.json()["result"]["tools"]) >= 1
-    r = await client.post(url, json=_body("tools/call", {"name": "list_chats", "arguments": {}}))
-    assert r.json()["result"]["isError"] is False
-    # той самий ключ у заголовку теж ок
-    r = await client.post(url, json=INIT, headers=hdr(token))
-    assert r.status_code == 200
-    assert (await client.get(url)).status_code == 405
-    assert (await client.delete(url)).status_code == 405
-
-
-async def test_path_token_unknown_and_revoked_audited(client):
-    r = await client.post("/mcp/k/tgb_nope", json=INIT)
-    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
-    token, key = await make_key(["all"])
-    await McpKeyRepository.revoke(key.id, "42")
-    r = await client.post(f"/mcp/k/{token}", json=INIT)
-    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
-    rows = await audit_rows()
-    assert len(rows) == 2 and all(x.status == "denied" for x in rows)
-    assert token not in repr([(x.reason, x.arguments) for x in rows])
-
-
-async def test_path_and_different_header_401(client):
-    t1, _ = await make_key(["all"])
-    t2, _ = await make_key(["all"])
-    r = await client.post(f"/mcp/k/{t1}", json=INIT, headers=hdr(t2))
-    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
-    rows = await audit_rows()
-    assert len(rows) == 1 and rows[0].reason == "bad_token"
+    assert (await client.post(f"/mcp/k/{token}", json=INIT)).status_code == 404
+    assert (await client.get(f"/mcp/k/{token}")).status_code == 404
 
 
 async def test_claude_origin_allowed_evil_denied(client):
     token, _ = await make_key(["all"])
     for o in ("https://claude.ai", "https://claude.com"):
-        r = await client.post(f"/mcp/k/{token}", json=INIT, headers={"Origin": o})
+        r = await client.post("/mcp", json=INIT, headers={**hdr(token), "Origin": o})
         assert r.status_code == 200
     for o in ("https://evil.example", "https://claude.ai.evil.example", "null"):
-        r = await client.post(f"/mcp/k/{token}", json=INIT, headers={"Origin": o})
+        r = await client.post("/mcp", json=INIT, headers={**hdr(token), "Origin": o})
         assert r.status_code == 403
 
 
-def test_access_log_filter_redacts_token():
-    import logging
-    f = [x for x in logging.getLogger("uvicorn.access").filters if type(x).__name__ == "_RedactKeyPath"]
-    assert len(f) == 1
-    rec = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d',
-                            ("1.2.3.4:5", "POST", "/mcp/k/tgb_SECRET-abc_1?x=1", "1.1", 200), None)
-    assert f[0].filter(rec)
-    out = rec.getMessage()
-    assert "tgb_SECRET" not in out and "/mcp/k/***" in out and "?x=1" in out
-    rec2 = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "POST /mcp/k/tgb_SECRET", None, None)
-    f[0].filter(rec2)
-    assert "SECRET" not in rec2.getMessage()
-
-
-async def test_deleted_key_401_header_and_path(client):
+async def test_deleted_key_401_header(client):
     token, key = await make_key(["all"])
     assert (await client.post("/mcp", json=INIT, headers=hdr(token))).status_code == 200
     assert await McpKeyRepository.delete(key.id, "42")
-    for r in (await client.post("/mcp", json=INIT, headers=hdr(token)),
-              await client.post(f"/mcp/k/{token}", json=INIT)):
-        assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+    r = await client.post("/mcp", json=INIT, headers=hdr(token))
+    assert r.status_code == 401 and 'error="invalid_token"' in r.headers["www-authenticate"]
     rows = [x for x in await audit_rows() if x.status == "denied"]
     assert rows and all(x.reason == "revoked" and x.key_id == key.id for x in rows)

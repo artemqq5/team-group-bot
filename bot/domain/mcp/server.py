@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import re
 import time
 from collections import deque
 from typing import Optional
@@ -11,6 +10,7 @@ from fastapi.responses import JSONResponse, Response
 
 from bot.data.repositories.McpAuditRepository import McpAuditRepository
 from bot.data.repositories.McpKeyRepository import McpKeyRepository
+from bot.data.repositories.McpOAuthRepository import McpOAuthRepository
 from bot.domain.mcp import tools
 
 MCP_PATH = os.getenv("MCP_PATH", "/mcp")
@@ -26,23 +26,6 @@ router = APIRouter()
 _rate: dict[int, deque] = {}
 # (kind, key_id|ip, хвилина) -> id рядка аудиту (агреговані відмови)
 _agg: dict[tuple, int] = {}
-
-
-class _RedactKeyPath(logging.Filter):
-    """Ключ у шляху /k/<token> не має потрапляти в access-лог uvicorn."""
-    _re = re.compile(re.escape(MCP_PATH) + r"/k/[^\s?\"]*")
-
-    def _fix(self, v):
-        return self._re.sub(f"{MCP_PATH}/k/***", v) if isinstance(v, str) else v
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = self._fix(record.msg)
-        if isinstance(record.args, tuple):
-            record.args = tuple(self._fix(a) for a in record.args)
-        return True
-
-
-logging.getLogger("uvicorn.access").addFilter(_RedactKeyPath())
 
 
 def _now() -> float:
@@ -101,29 +84,27 @@ def _rate_limited(key_id: int) -> bool:
     return False
 
 
-def _unauthorized(audit_ok: bool) -> Response:
+def _unauthorized(audit_ok: bool, presented: bool = False) -> Response:
     if not audit_ok:
         return JSONResponse({"error": "audit unavailable"}, status_code=503)
-    return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
+    from bot.domain.mcp.oauth import resource_metadata_url  # імпорт тут: oauth сам імпортує server
+    challenge = f'Bearer resource_metadata="{resource_metadata_url()}"'
+    if presented:
+        challenge += ', error="invalid_token"'
+    return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"WWW-Authenticate": challenge})
 
 
 @router.api_route(MCP_PATH, methods=["GET", "DELETE"])
-@router.api_route(MCP_PATH + "/k/{token}", methods=["GET", "DELETE"])
-async def mcp_not_allowed(token: Optional[str] = None):
+async def mcp_not_allowed():
     return Response(status_code=405, headers={"Allow": "POST"})
 
 
 @router.post(MCP_PATH)
 async def mcp_endpoint(request: Request):
-    return await _handle(request, None)
+    return await _handle(request)
 
 
-@router.post(MCP_PATH + "/k/{token}")
-async def mcp_endpoint_key_in_path(request: Request, token: str):
-    return await _handle(request, token)
-
-
-async def _handle(request: Request, path_token: Optional[str]):
+async def _handle(request: Request):
     origin = request.headers.get("origin")
     if origin is not None and origin not in ALLOWED_ORIGINS:
         return JSONResponse({"error": "forbidden"}, status_code=403)
@@ -145,17 +126,11 @@ async def _handle(request: Request, path_token: Optional[str]):
     token = token.strip()
     if scheme.lower() != "bearer":
         token = ""
-    if path_token:
-        if token and token != path_token:  # два різні ключі — відмова, без обходу
-            ok = await _audit_aggregated("bad_token", ip, method="auth", status="denied", reason="bad_token",
-                                         client_ip=ip)
-            return _unauthorized(ok)
-        token = path_token
     if not token:
         ok = await _audit_aggregated("no_token", ip, method="auth", status="denied", reason="no_token", client_ip=ip)
         return _unauthorized(ok)
     try:
-        resolved = await McpKeyRepository.resolve_by_token(token)
+        resolved = await McpOAuthRepository.resolve_access(token)
     except Exception as e:
         logging.error(f"mcp: resolve failed: {type(e).__name__}")
         resolved = None
@@ -166,7 +141,7 @@ async def _handle(request: Request, path_token: Optional[str]):
         ident = key.id if key is not None else ip
         ok = await _audit_aggregated(reason, ident, method="auth", status="denied", reason=reason,
                                      key_id=key.id if key is not None else None, client_ip=ip)
-        return _unauthorized(ok)
+        return _unauthorized(ok, presented=True)
 
     # --- розбір JSON-RPC ---
     try:

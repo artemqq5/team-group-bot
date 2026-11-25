@@ -14,6 +14,9 @@ from sqlalchemy.pool import NullPool
 # Примусово (не setdefault): тести ніколи не повинні торкатися реальної БД
 os.environ["DB_LINK_CONNECTION"] = "postgresql+asyncpg://dummy:dummy@127.0.0.1:1/dummy"
 
+# Тести ходять на /mcp без префікса незалежно від оточення розробника
+os.environ["MCP_PATH"] = "/mcp"
+
 from bot.data import db_connection
 from bot.data.models import Base
 

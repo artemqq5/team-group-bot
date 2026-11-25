@@ -132,10 +132,11 @@ async def test_create_flow_end_to_end(monkeypatch):
     keys = await McpKeyRepository.list_keys()
     assert len(keys) == 1 and keys[0].label == "Bob" and keys[0].categories == ["apps"]
     txt = last_text(c)
-    m = re.search(rf"<code>https://x\.example{MCP_PATH}/k/(tgb_[\w-]+)</code>", txt)
+    m = re.search(r"<code>(tgb_[\w-]+)</code>", txt)
     secret = m.group(1)
-    assert f"claude mcp add --transport http mt-chats https://x.example{MCP_PATH}/k/{secret}" in txt
-    assert "--header" not in txt and "Bearer" not in txt
+    assert f"<code>https://x.example{MCP_PATH}</code>" in txt  # адрес коннектора без секрета
+    assert f"{MCP_PATH}/k/" not in txt and "claude mcp add" not in txt and "Bearer" not in txt
+    assert txt.count(secret) == 1
     key, reason = await McpKeyRepository.resolve_by_token(secret)
     assert reason is None
     # secret not in FSM storage

@@ -7,7 +7,8 @@ from fastapi import FastAPI
 from bot.data import db_connection
 from bot.data.models import ChatMessageModel, ChatModel
 from bot.data.repositories.McpKeyRepository import McpKeyRepository
-from bot.domain.mcp import server
+from bot.data.repositories.McpOAuthRepository import McpOAuthRepository
+from bot.domain.mcp import oauth, server
 
 T0 = datetime(2025, 1, 10, 12, 0, 0)
 
@@ -15,6 +16,7 @@ T0 = datetime(2025, 1, 10, 12, 0, 0)
 def make_client():
     app = FastAPI()
     app.include_router(server.router)
+    app.include_router(oauth.router)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
 
 
@@ -32,8 +34,10 @@ async def seed_msg(gid, mid, sent_at=T0, text="hello", author="1", **kw):
 
 
 async def make_key(categories):
-    token, key = await McpKeyRepository.create("lbl", "42", categories)
-    return token, key
+    """Повертає (OAuth access-токен, key): MCP приймає лише access-токени."""
+    _, key = await McpKeyRepository.create("lbl", "42", categories)
+    access, _refresh, _family = await McpOAuthRepository.issue_pair(key.id, "mcpc_test")
+    return access, key
 
 
 def hdr(token):

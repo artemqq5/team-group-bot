@@ -39,6 +39,10 @@ async def _admin_or_deny(callback: CallbackQuery):
     return admin
 
 
+def _connector_url() -> str:
+    return f"{os.getenv('WEBHOOK_BASE_URL', '').rstrip('/')}{MCP_PATH}"
+
+
 def _fmt_dt(dt) -> str:
     return dt.strftime("%Y-%m-%d %H:%M") if dt else "—"
 
@@ -179,17 +183,16 @@ async def mcp_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
         await callback.answer()
         return
     secret, key = created
-    base = os.getenv("WEBHOOK_BASE_URL", "")
-    url = f"{base}{MCP_PATH}/k/{secret}"
     text = (
         f"✅ Ключ <b>{escape(key.label)}</b> создан.\n\n"
-        f"Ссылка для коннектора:\n<code>{escape(url)}</code>\n\n"
-        "Claude (сайт/приложение): Настройки → Коннекторы → Добавить свой коннектор → "
-        "вставить ссылку, вход: без входа (No sign-in). "
+        f"Ключ (показан один раз):\n<code>{escape(secret)}</code>\n\n"
+        f"Адрес коннектора:\n<code>{escape(_connector_url())}</code>\n\n"
+        "Claude (сайт/приложение): Настройки → Коннекторы → Добавить свой коннектор → вставить адрес. "
+        "Откроется страница входа — вставьте туда ключ. "
         "Для Team/Enterprise: Organization settings → Connectors (владелец).\n\n"
-        f"Claude Code:\n<code>{escape(f'claude mcp add --transport http mt-chats {url}')}</code>\n\n"
-        "⚠️ Ссылка = ключ. Не пересылайте её; при утечке отзовите ключ в боте.\n"
-        "Ключ показан один раз. Сохраните его сейчас."
+        "⚠️ Ключ вводится только на странице входа, в адрес его вставлять не нужно. "
+        "Не пересылайте ключ; при утечке отзовите его в боте.\n"
+        "Сохраните ключ сейчас: повторно он не показывается."
     )
     await edit_or_answer(callback, text, reply_markup=kb_mcp_secret(key.id))
     await callback.answer()
@@ -230,6 +233,7 @@ async def mcp_view(callback: CallbackQuery, callback_data: McpKeyCallback):
         f"Создал: <code>{escape(key.created_by)}</code>",
         f"Создан: {_fmt_dt(key.created_at)} UTC",
         f"Категории: {escape(_cats_text(key.categories))}",
+        f"Адрес коннектора: <code>{escape(_connector_url())}</code>",
         f"Последнее использование: {_fmt_dt(key.last_used_at)}" + (" UTC" if key.last_used_at else ""),
     ]
     if key.revoked:

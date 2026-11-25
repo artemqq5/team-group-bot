@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -103,6 +103,36 @@ class McpKeyModel(Base):
     revoked_by: Mapped[str] = mapped_column(String(255), nullable=True)
     last_used_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
+
+
+class McpOAuthClientModel(Base):
+    __tablename__ = "mcp_oauth_clients"
+
+    client_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    client_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    redirect_uris: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
+    client_ip: Mapped[str] = mapped_column(String(64), nullable=True)
+
+
+class McpOAuthTokenModel(Base):
+    __tablename__ = "mcp_oauth_tokens"
+    __table_args__ = (
+        Index("ix_mcp_oauth_tokens_family", "family_id"),
+        Index("ix_mcp_oauth_tokens_key", "key_id"),
+        Index("ix_mcp_oauth_tokens_expires", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    key_id: Mapped[int] = mapped_column(Integer, ForeignKey("mcp_keys.id"), nullable=False)
+    client_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    family_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)  # access | refresh
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)  # sha256, plaintext не зберігається
+    created_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
 
 
 class McpAuditLogModel(Base):
