@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 
 from bot.data import db_connection
 from bot.data.db_connection import log_exc_with_try_except
@@ -41,7 +41,7 @@ class McpKeyRepository:
     @log_exc_with_try_except()
     async def list_keys() -> list[McpKeyModel]:
         async with db_connection.async_session() as session:
-            result = await session.execute(select(McpKeyModel).order_by(McpKeyModel.id.desc()))
+            result = await session.execute(select(McpKeyModel).where(McpKeyModel.deleted_at.is_(None)).order_by(McpKeyModel.id.desc()))
             return list(result.scalars().all())
 
     @staticmethod
@@ -64,6 +64,22 @@ class McpKeyRepository:
 
     @staticmethod
     @log_exc_with_try_except()
+    async def delete(key_id: int, by_admin: str) -> bool:
+        """М'яке видалення: рядок лишається для журналу; активний ключ заодно відкликається."""
+        now = datetime.utcnow()
+        async with db_connection.async_session() as session:
+            res = await session.execute(
+                update(McpKeyModel)
+                .where(McpKeyModel.id == key_id, McpKeyModel.deleted_at.is_(None))
+                .values(deleted_at=now, revoked=True,
+                        revoked_at=func.coalesce(McpKeyModel.revoked_at, now),
+                        revoked_by=func.coalesce(McpKeyModel.revoked_by, str(by_admin)))
+            )
+            await session.commit()
+            return res.rowcount > 0
+
+    @staticmethod
+    @log_exc_with_try_except()
     async def resolve_by_token(token: str):
         """(key, None) якщо валідний; (key|None, reason) якщо ні; None при збої БД."""
         async with db_connection.async_session() as session:
@@ -73,7 +89,7 @@ class McpKeyRepository:
             key = result.scalar_one_or_none()
         if key is None:
             return None, "invalid_token"
-        if key.revoked:
+        if key.revoked or key.deleted_at is not None:
             return key, "revoked"
         if key.expires_at is not None and key.expires_at <= datetime.utcnow():
             return key, "expired"

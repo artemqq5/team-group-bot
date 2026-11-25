@@ -202,3 +202,85 @@ async def test_audit_repo_pages(db):
     assert [r.method for r in await McpAuditRepository.page_by_key(7, 4, 2)] == ["m0"]
     assert [r.method for r in await McpAuditRepository.page_unknown(0, 10)] == ["x"]
     assert len(await McpAuditRepository.export_rows(7)) == 5
+
+
+# --- ключ у шляху /k/<token> ---
+
+def _body(method, params=None, i=1):
+    b = {"jsonrpc": "2.0", "id": i, "method": method}
+    if params is not None:
+        b["params"] = params
+    return b
+
+
+async def test_path_token_works(client):
+    token, _ = await make_key(["all"])
+    await seed_chat("-100", "G", creo=True)
+    url = f"/mcp/k/{token}"
+    r = await client.post(url, json=INIT)
+    assert r.status_code == 200 and r.json()["result"]["serverInfo"]["name"] == "mt-chats"
+    r = await client.post(url, json=_body("tools/list"))
+    assert len(r.json()["result"]["tools"]) >= 1
+    r = await client.post(url, json=_body("tools/call", {"name": "list_chats", "arguments": {}}))
+    assert r.json()["result"]["isError"] is False
+    # той самий ключ у заголовку теж ок
+    r = await client.post(url, json=INIT, headers=hdr(token))
+    assert r.status_code == 200
+    assert (await client.get(url)).status_code == 405
+    assert (await client.delete(url)).status_code == 405
+
+
+async def test_path_token_unknown_and_revoked_audited(client):
+    r = await client.post("/mcp/k/tgb_nope", json=INIT)
+    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+    token, key = await make_key(["all"])
+    await McpKeyRepository.revoke(key.id, "42")
+    r = await client.post(f"/mcp/k/{token}", json=INIT)
+    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+    rows = await audit_rows()
+    assert len(rows) == 2 and all(x.status == "denied" for x in rows)
+    assert token not in repr([(x.reason, x.arguments) for x in rows])
+
+
+async def test_path_and_different_header_401(client):
+    t1, _ = await make_key(["all"])
+    t2, _ = await make_key(["all"])
+    r = await client.post(f"/mcp/k/{t1}", json=INIT, headers=hdr(t2))
+    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+    rows = await audit_rows()
+    assert len(rows) == 1 and rows[0].reason == "bad_token"
+
+
+async def test_claude_origin_allowed_evil_denied(client):
+    token, _ = await make_key(["all"])
+    for o in ("https://claude.ai", "https://claude.com"):
+        r = await client.post(f"/mcp/k/{token}", json=INIT, headers={"Origin": o})
+        assert r.status_code == 200
+    for o in ("https://evil.example", "https://claude.ai.evil.example", "null"):
+        r = await client.post(f"/mcp/k/{token}", json=INIT, headers={"Origin": o})
+        assert r.status_code == 403
+
+
+def test_access_log_filter_redacts_token():
+    import logging
+    f = [x for x in logging.getLogger("uvicorn.access").filters if type(x).__name__ == "_RedactKeyPath"]
+    assert len(f) == 1
+    rec = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d',
+                            ("1.2.3.4:5", "POST", "/mcp/k/tgb_SECRET-abc_1?x=1", "1.1", 200), None)
+    assert f[0].filter(rec)
+    out = rec.getMessage()
+    assert "tgb_SECRET" not in out and "/mcp/k/***" in out and "?x=1" in out
+    rec2 = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "POST /mcp/k/tgb_SECRET", None, None)
+    f[0].filter(rec2)
+    assert "SECRET" not in rec2.getMessage()
+
+
+async def test_deleted_key_401_header_and_path(client):
+    token, key = await make_key(["all"])
+    assert (await client.post("/mcp", json=INIT, headers=hdr(token))).status_code == 200
+    assert await McpKeyRepository.delete(key.id, "42")
+    for r in (await client.post("/mcp", json=INIT, headers=hdr(token)),
+              await client.post(f"/mcp/k/{token}", json=INIT)):
+        assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+    rows = [x for x in await audit_rows() if x.status == "denied"]
+    assert rows and all(x.reason == "revoked" and x.key_id == key.id for x in rows)

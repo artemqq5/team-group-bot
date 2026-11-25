@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from collections import deque
 from typing import Optional
@@ -18,11 +19,30 @@ MAX_BODY = 64 * 1024
 RATE_LIMIT = 60  # викликів на хвилину на ключ
 SAFE_ARGS = ("chat_id", "since", "until", "query", "limit", "cursor")
 
+ALLOWED_ORIGINS = ("https://claude.ai", "https://claude.com")
+
 router = APIRouter()
 
 _rate: dict[int, deque] = {}
 # (kind, key_id|ip, хвилина) -> id рядка аудиту (агреговані відмови)
 _agg: dict[tuple, int] = {}
+
+
+class _RedactKeyPath(logging.Filter):
+    """Ключ у шляху /k/<token> не має потрапляти в access-лог uvicorn."""
+    _re = re.compile(re.escape(MCP_PATH) + r"/k/[^\s?\"]*")
+
+    def _fix(self, v):
+        return self._re.sub(f"{MCP_PATH}/k/***", v) if isinstance(v, str) else v
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = self._fix(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(self._fix(a) for a in record.args)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactKeyPath())
 
 
 def _now() -> float:
@@ -88,13 +108,24 @@ def _unauthorized(audit_ok: bool) -> Response:
 
 
 @router.api_route(MCP_PATH, methods=["GET", "DELETE"])
-async def mcp_not_allowed():
+@router.api_route(MCP_PATH + "/k/{token}", methods=["GET", "DELETE"])
+async def mcp_not_allowed(token: Optional[str] = None):
     return Response(status_code=405, headers={"Allow": "POST"})
 
 
 @router.post(MCP_PATH)
 async def mcp_endpoint(request: Request):
-    if "origin" in request.headers:
+    return await _handle(request, None)
+
+
+@router.post(MCP_PATH + "/k/{token}")
+async def mcp_endpoint_key_in_path(request: Request, token: str):
+    return await _handle(request, token)
+
+
+async def _handle(request: Request, path_token: Optional[str]):
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in ALLOWED_ORIGINS:
         return JSONResponse({"error": "forbidden"}, status_code=403)
     try:
         declared = int(request.headers.get("content-length", 0))
@@ -112,7 +143,15 @@ async def mcp_endpoint(request: Request):
     auth = request.headers.get("authorization", "")
     scheme, _, token = auth.partition(" ")
     token = token.strip()
-    if scheme.lower() != "bearer" or not token:
+    if scheme.lower() != "bearer":
+        token = ""
+    if path_token:
+        if token and token != path_token:  # два різні ключі — відмова, без обходу
+            ok = await _audit_aggregated("bad_token", ip, method="auth", status="denied", reason="bad_token",
+                                         client_ip=ip)
+            return _unauthorized(ok)
+        token = path_token
+    if not token:
         ok = await _audit_aggregated("no_token", ip, method="auth", status="denied", reason="no_token", client_ip=ip)
         return _unauthorized(ok)
     try:

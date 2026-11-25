@@ -99,7 +99,7 @@ class McpCategoryCallback(CallbackData, prefix="mcc"):
 
 class McpKeyCallback(CallbackData, prefix="mck"):
     key_id: int
-    action: str  # view | revoke | revoke_yes | hide
+    action: str  # view | revoke | revoke_yes | delete | delete_yes | hide
 
 
 class McpAuditCallback(CallbackData, prefix="mca"):
@@ -488,6 +488,7 @@ def kb_mcp_key_view(key) -> InlineKeyboardMarkup:
     kb.button(text="📜 Журнал", callback_data=McpAuditCallback(key_id=key.id))
     if not key.revoked:
         kb.button(text="🚫 Отозвать", callback_data=McpKeyCallback(key_id=key.id, action="revoke"))
+    kb.button(text="🗑 Удалить", callback_data=McpKeyCallback(key_id=key.id, action="delete"))
     kb.button(text="↩️ Назад", callback_data=McpMenuCallback(action="list"))
     kb.adjust(1)
     return kb.as_markup()
@@ -498,6 +499,14 @@ def kb_mcp_revoke_confirm(key_id: int) -> InlineKeyboardMarkup:
     kb.button(text="✅ Да, отозвать", callback_data=McpKeyCallback(key_id=key_id, action="revoke_yes"))
     kb.button(text="↩️ Назад", callback_data=McpKeyCallback(key_id=key_id, action="view"))
     kb.adjust(1)
+    return kb.as_markup()
+
+
+def kb_mcp_delete_confirm(key_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да", callback_data=McpKeyCallback(key_id=key_id, action="delete_yes"))
+    kb.button(text="❌ Нет", callback_data=McpKeyCallback(key_id=key_id, action="view"))
+    kb.adjust(2)
     return kb.as_markup()
 
 

@@ -18,7 +18,7 @@ from bot.domain.tools.edit_helper import edit_or_answer
 from bot.presentation.keyboard.admin_ import (
     McpMenuCallback, McpCategoryCallback, McpKeyCallback, McpAuditCallback, CATEGORY_LABELS,
     kb_cancel, kb_mcp_keys, kb_mcp_categories, kb_mcp_confirm, kb_mcp_secret, kb_mcp_key_view,
-    kb_mcp_revoke_confirm, kb_mcp_audit
+    kb_mcp_revoke_confirm, kb_mcp_audit, kb_mcp_delete_confirm
 )
 
 router = Router()
@@ -180,12 +180,16 @@ async def mcp_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
         return
     secret, key = created
     base = os.getenv("WEBHOOK_BASE_URL", "")
-    command = f'claude mcp add --transport http mt-chats {base}{MCP_PATH} --header "Authorization: Bearer {secret}"'
+    url = f"{base}{MCP_PATH}/k/{secret}"
     text = (
         f"✅ Ключ <b>{escape(key.label)}</b> создан.\n\n"
-        f"Секрет:\n<code>{secret}</code>\n\n"
-        f"Команда для Claude Code:\n<code>{escape(command)}</code>\n\n"
-        "⚠️ Ключ показан один раз. Сохраните его сейчас."
+        f"Ссылка для коннектора:\n<code>{escape(url)}</code>\n\n"
+        "Claude (сайт/приложение): Настройки → Коннекторы → Добавить свой коннектор → "
+        "вставить ссылку, вход: без входа (No sign-in). "
+        "Для Team/Enterprise: Organization settings → Connectors (владелец).\n\n"
+        f"Claude Code:\n<code>{escape(f'claude mcp add --transport http mt-chats {url}')}</code>\n\n"
+        "⚠️ Ссылка = ключ. Не пересылайте её; при утечке отзовите ключ в боте.\n"
+        "Ключ показан один раз. Сохраните его сейчас."
     )
     await edit_or_answer(callback, text, reply_markup=kb_mcp_secret(key.id))
     await callback.answer()
@@ -217,7 +221,7 @@ async def mcp_view(callback: CallbackQuery, callback_data: McpKeyCallback):
     if not await _admin_or_deny(callback):
         return
     key = await McpKeyRepository.get(callback_data.key_id)
-    if not key:
+    if not key or key.deleted_at:
         await callback.answer("Ключ не найден", show_alert=True)
         return
     lines = [
@@ -239,7 +243,7 @@ async def mcp_revoke_ask(callback: CallbackQuery, callback_data: McpKeyCallback)
     if not await _admin_or_deny(callback):
         return
     key = await McpKeyRepository.get(callback_data.key_id)
-    if not key:
+    if not key or key.deleted_at:
         await callback.answer("Ключ не найден", show_alert=True)
         return
     await edit_or_answer(
@@ -255,7 +259,7 @@ async def mcp_revoke(callback: CallbackQuery, callback_data: McpKeyCallback, bot
     if not await _admin_or_deny(callback):
         return
     key = await McpKeyRepository.get(callback_data.key_id)
-    if not key:
+    if not key or key.deleted_at:
         await callback.answer("Ключ не найден", show_alert=True)
         return
     revoked = await McpKeyRepository.revoke(key.id, str(callback.from_user.id))
@@ -271,6 +275,46 @@ async def mcp_revoke(callback: CallbackQuery, callback_data: McpKeyCallback, bot
     if key:
         await edit_or_answer(
             callback, f"🚫 Ключ <b>{escape(key.label)}</b> отозван.", reply_markup=kb_mcp_key_view(key)
+        )
+
+
+@router.callback_query(McpKeyCallback.filter(F.action == "delete"))
+async def mcp_delete_ask(callback: CallbackQuery, callback_data: McpKeyCallback):
+    if not await _admin_or_deny(callback):
+        return
+    key = await McpKeyRepository.get(callback_data.key_id)
+    if not key or key.deleted_at:
+        await callback.answer("Ключ не найден", show_alert=True)
+        return
+    await edit_or_answer(
+        callback,
+        f"Удалить ключ «{escape(key.label)}»? Доступ по нему пропадёт, журнал действий сохранится.",
+        reply_markup=kb_mcp_delete_confirm(key.id)
+    )
+    await callback.answer()
+
+
+@router.callback_query(McpKeyCallback.filter(F.action == "delete_yes"))
+async def mcp_delete(callback: CallbackQuery, callback_data: McpKeyCallback, bot: Bot):
+    if not await _admin_or_deny(callback):
+        return
+    key = await McpKeyRepository.get(callback_data.key_id)
+    if not key or key.deleted_at:
+        await callback.answer("Ключ не найден", show_alert=True)
+        return
+    # атомарний UPDATE: повторне натискання не дасть другого сповіщення
+    deleted = await McpKeyRepository.delete(key.id, str(callback.from_user.id))
+    await callback.answer("Ключ удалён" if deleted else "Ключ уже удалён")
+    if deleted:
+        await _notify_admins(
+            bot,
+            f"🗑 Удалён ключ MCP <b>{escape(key.label)}</b>\n"
+            f"Категории: {escape(_cats_text(key.categories))}\n"
+            f"Удалил: {_actor(callback)}"
+        )
+        await edit_or_answer(
+            callback, f"🗑 Ключ <b>{escape(key.label)}</b> удалён. Журнал действий сохранён.",
+            reply_markup=kb_mcp_keys(await McpKeyRepository.list_keys() or [])
         )
 
 
@@ -311,7 +355,8 @@ async def mcp_audit(callback: CallbackQuery, callback_data: McpAuditCallback):
     # limit+1: так дізнаємось, чи є наступна сторінка
     if key_id:
         rows = await McpAuditRepository.page_by_key(key_id, offset, AUDIT_PAGE_SIZE + 1)
-        title = "📜 Журнал ключа"
+        k = await McpKeyRepository.get(key_id)
+        title = "📜 Журнал ключа" + (f" «{escape(k.label)}»" + (" (удалён)" if k.deleted_at else "") if k else "")
     else:
         rows = await McpAuditRepository.page_unknown(offset, AUDIT_PAGE_SIZE + 1)
         title = "🚫 Отказы без ключа"

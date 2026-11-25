@@ -71,6 +71,8 @@ async def test_all_handlers_deny_non_admin(monkeypatch):
         (h.mcp_view, (kb.McpKeyCallback(key_id=key.id, action="view"),)),
         (h.mcp_revoke_ask, (kb.McpKeyCallback(key_id=key.id, action="revoke"),)),
         (h.mcp_revoke, (kb.McpKeyCallback(key_id=key.id, action="revoke_yes"), bot)),
+        (h.mcp_delete_ask, (kb.McpKeyCallback(key_id=key.id, action="delete"),)),
+        (h.mcp_delete, (kb.McpKeyCallback(key_id=key.id, action="delete_yes"), bot)),
         (h.mcp_audit, (kb.McpAuditCallback(key_id=key.id),)),
         (h.mcp_audit_export, (kb.McpAuditCallback(key_id=key.id, export=True),)),
     ]
@@ -130,10 +132,10 @@ async def test_create_flow_end_to_end(monkeypatch):
     keys = await McpKeyRepository.list_keys()
     assert len(keys) == 1 and keys[0].label == "Bob" and keys[0].categories == ["apps"]
     txt = last_text(c)
-    m = re.search(r"<code>(tgb_[\w-]+)</code>", txt)
+    m = re.search(rf"<code>https://x\.example{MCP_PATH}/k/(tgb_[\w-]+)</code>", txt)
     secret = m.group(1)
-    assert f"claude mcp add --transport http mt-chats https://x.example{MCP_PATH}" in txt
-    assert f"Authorization: Bearer {secret}" in txt
+    assert f"claude mcp add --transport http mt-chats https://x.example{MCP_PATH}/k/{secret}" in txt
+    assert "--header" not in txt and "Bearer" not in txt
     key, reason = await McpKeyRepository.resolve_by_token(secret)
     assert reason is None
     # secret not in FSM storage
@@ -193,6 +195,52 @@ async def test_notify_failure_does_not_break():
     bot.send_message.side_effect = RuntimeError("blocked")
     await h.mcp_revoke(cb(), kb.McpKeyCallback(key_id=key.id, action="revoke_yes"), bot)
     assert (await McpKeyRepository.get(key.id)).revoked is True
+
+
+# ---------- delete ----------
+@pytest.mark.asyncio
+async def test_delete_requires_confirm_hides_notifies_keeps_audit():
+    secret, key = await make_key(label="Del<me>")
+    await McpAuditRepository.add(method="tools/call", status="ok", key_id=key.id)
+    bot = AsyncMock()
+    c = cb()
+    await h.mcp_delete_ask(c, kb.McpKeyCallback(key_id=key.id, action="delete"))
+    assert "Удалить ключ «Del&lt;me&gt;»? Доступ по нему пропадёт, журнал действий сохранится." in last_text(c)
+    assert (await McpKeyRepository.get(key.id)).deleted_at is None
+    assert (await McpKeyRepository.resolve_by_token(secret))[1] is None
+    assert bot.send_message.call_count == 0
+    await h.mcp_delete(cb(), kb.McpKeyCallback(key_id=key.id, action="delete_yes"), bot)
+    row = await McpKeyRepository.get(key.id)
+    assert row.deleted_at is not None and row.revoked and row.revoked_at and row.revoked_by == str(ADMIN)
+    assert (await McpKeyRepository.resolve_by_token(secret))[1] == "revoked"
+    assert await McpKeyRepository.list_keys() == []
+    assert {a[0][0] for a in bot.send_message.call_args_list} == {str(ADMIN), "333"}
+    assert len(await McpAuditRepository.page_by_key(key.id, 0, 10)) == 1
+    # повторне підтвердження: без другого сповіщення; видалений ключ — "не знайдено"
+    n = bot.send_message.call_count
+    c = cb()
+    await h.mcp_delete(c, kb.McpKeyCallback(key_id=key.id, action="delete_yes"), bot)
+    c.answer.assert_awaited_with("Ключ не найден", show_alert=True)
+    assert bot.send_message.call_count == n
+    assert await McpKeyRepository.delete(key.id, "1") is False
+    # журнал показує мітку і «(удалён)»
+    c = cb()
+    await h.mcp_audit(c, kb.McpAuditCallback(key_id=key.id))
+    assert "Del&lt;me&gt;" in last_text(c) and "(удалён)" in last_text(c)
+
+
+@pytest.mark.asyncio
+async def test_delete_revoked_key_keeps_original_revoke_info():
+    _, key = await make_key()
+    await McpKeyRepository.revoke(key.id, "777")
+    assert await McpKeyRepository.delete(key.id, "888") is True
+    row = await McpKeyRepository.get(key.id)
+    assert row.revoked_by == "777" and row.deleted_at is not None
+
+
+def test_key_card_has_delete_button():
+    class K: id = 5; revoked = True
+    assert any(d.startswith("mck:") and d.endswith(":delete") for d in all_cb_data(kb.kb_mcp_key_view(K)))
 
 
 # ---------- audit ----------

@@ -102,6 +102,7 @@ class McpKeyModel(Base):
     revoked_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
     revoked_by: Mapped[str] = mapped_column(String(255), nullable=True)
     last_used_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
 
 
 class McpAuditLogModel(Base):
