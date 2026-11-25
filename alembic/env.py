@@ -24,7 +24,8 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", os.getenv("DB_LINK_CONNECTION"))
+# ConfigParser інтерполює %, тому url-encoded пароль (%21) треба екранувати
+config.set_main_option("sqlalchemy.url", os.getenv("DB_LINK_CONNECTION").replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:

@@ -195,3 +195,12 @@ async def test_capture_timeout_does_not_poison_pool(monkeypatch):
         async with engine.begin() as conn:
             await conn.execute(text("TRUNCATE chat_messages RESTART IDENTITY"))
         await engine.dispose()
+
+
+def test_alembic_config_percent_encoded_password():
+    # регресія: %21 у паролі ламав ConfigParser-інтерполяцію в alembic/env.py
+    from alembic.config import Config
+    url = "postgresql+asyncpg://tgb:abc%21s@postgres:5432/db"
+    cfg = Config()
+    cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    assert cfg.get_main_option("sqlalchemy.url") == url
