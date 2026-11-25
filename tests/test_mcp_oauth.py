@@ -203,7 +203,7 @@ async def test_authorize_page_headers_and_cookie(client):
     assert "claude.ai" in r.text and "alert(1)" not in r.text  # показуємо host redirect_uri, не client_name
     assert 'type="password"' in r.text and 'autocomplete="off"' in r.text and "Подключить" in r.text
     assert r.headers["cache-control"] == "no-store" and r.headers["x-frame-options"] == "DENY"
-    assert r.headers["referrer-policy"] == "no-referrer"
+    assert r.headers["referrer-policy"] == "same-origin"
     csp = r.headers["content-security-policy"]
     assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp and "form-action 'self'" in csp
     ck = r.headers["set-cookie"].lower()
@@ -248,6 +248,7 @@ async def test_happy_path_full_flow(client):
     v, ch = pkce()
     tx, cookie = await start(client, cid, ch)
     r = await signin(client, tx, cookie, secret, origin=BASE)
+    assert r.headers["referrer-policy"] == "same-origin"
     assert r.status_code == 303 and r.headers["cache-control"] == "no-store"
     loc = urlsplit(r.headers["location"])
     assert f"{loc.scheme}://{loc.netloc}{loc.path}" == REDIR

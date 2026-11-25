@@ -125,7 +125,7 @@ def _page(title: str, body: str, status: int = 200, cookie_tx: Optional[str] = N
         "Cache-Control": "no-store",
         "Pragma": "no-cache",
         "X-Frame-Options": "DENY",
-        "Referrer-Policy": "no-referrer",
+        "Referrer-Policy": "same-origin",
         "Content-Security-Policy": ("default-src 'none'; style-src 'unsafe-inline'; "
                                     "form-action 'self' https://claude.ai https://claude.com; frame-ancestors 'none'"),
     })
@@ -347,7 +347,7 @@ async def authorize_post(request: Request):
     if tx["has_state"]:
         params["state"] = tx["state"]
     resp = Response(status_code=303, headers={"Location": f"{tx['redirect_uri']}?{urlencode(params)}",
-                                              "Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+                                              "Cache-Control": "no-store", "Referrer-Policy": "same-origin"})
     resp.delete_cookie(COOKIE, path=f"{PREFIX}/oauth")
     return resp
 
