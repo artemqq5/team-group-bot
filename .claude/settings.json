@@ -1,0 +1,23 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)", "Read(./.env.prod)", "Read(./.env.production)", "Read(./.env.dev)",
+      "Read(./.env.development)", "Read(./.env.staging)", "Read(./.env.test)",
+      "Read(./prod_config/.env)", "Read(./prod_config/.env.*)",
+      "Read(./pgdata/**)", "Read(./logs/**)",
+      "Read(./**/*.pem)", "Read(./**/*.key)",
+      "Read(./credential.json)", "Read(./token.pickle)",
+      "Edit(./.env)", "Edit(./prod_config/.env)", "Edit(./prod_config/.env.*)",
+      "Bash(docker compose config*)", "Bash(docker compose exec*)", "Bash(docker inspect*)",
+      "Bash(printenv*)", "Bash(env)", "Bash(git show *.env*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gcloud/**)"
+    ]
+  }
+}
