@@ -31,6 +31,7 @@ IP_FAIL_LIMIT = 10
 IP_FAIL_WINDOW = 15 * 60
 REGISTER_LIMIT = 30
 REGISTER_WINDOW = 3600
+REGISTER_GLOBAL_LIMIT = 200  # на всі IP разом: X-Forwarded-For підроблюваний при прямому доступі до порту
 MAX_STORE = 10000
 
 _CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
@@ -41,6 +42,7 @@ _tx: dict[str, dict] = {}
 _codes: dict[str, dict] = {}
 _fail_ip: dict[str, deque] = {}
 _reg_ip: dict[str, deque] = {}
+_reg_all: deque = deque()
 
 
 def _reset() -> None:
@@ -48,6 +50,7 @@ def _reset() -> None:
     _codes.clear()
     _fail_ip.clear()
     _reg_ip.clear()
+    _reg_all.clear()
 
 
 # ─── Похідні адреси (з env, ніколи з Host) ────────────────────────────────────
@@ -219,11 +222,14 @@ async def register(request: Request):
         return _err("invalid_client_metadata")
     now = server._now()
     q = _window(_reg_ip, ip or "-", REGISTER_WINDOW, now)
-    if len(q) >= REGISTER_LIMIT:
+    while _reg_all and _reg_all[0] <= now - REGISTER_WINDOW:
+        _reg_all.popleft()
+    if len(q) >= REGISTER_LIMIT or len(_reg_all) >= REGISTER_GLOBAL_LIMIT:
         ok = await server._audit_aggregated("throttled", ("reg", ip), method="oauth_register", status="denied",
                                             reason="throttled", client_ip=ip)
         return _err("temporarily_unavailable" if ok else "server_error", 429 if ok else 503)
     q.append(now)
+    _reg_all.append(now)
     try:
         meta = json.loads(body)
     except (ValueError, UnicodeDecodeError):

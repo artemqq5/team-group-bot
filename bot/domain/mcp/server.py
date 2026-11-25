@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from collections import deque
 from typing import Optional
@@ -20,6 +21,22 @@ RATE_LIMIT = 60  # викликів на хвилину на ключ
 SAFE_ARGS = ("chat_id", "since", "until", "query", "limit", "cursor")
 
 ALLOWED_ORIGINS = ("https://claude.ai", "https://claude.com")
+
+_SECRET_RE = re.compile(r"tgb[ar]?_[A-Za-z0-9_-]+")
+
+
+class _RedactSecrets(logging.Filter):
+    """Старі конектори можуть ще бити в видалений /k/<key>: uvicorn.access логує шлях — маскуємо токени."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(_SECRET_RE.sub("tgb_***", a) if isinstance(a, str) else a for a in record.args)
+        if isinstance(record.msg, str):
+            record.msg = _SECRET_RE.sub("tgb_***", record.msg)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactSecrets())
 
 router = APIRouter()
 

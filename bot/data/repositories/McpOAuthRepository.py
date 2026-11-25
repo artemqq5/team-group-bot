@@ -157,3 +157,15 @@ class McpOAuthRepository:
                 delete(McpOAuthTokenModel).where(McpOAuthTokenModel.expires_at < cutoff))
             await session.commit()
             return res.rowcount
+
+    @staticmethod
+    @log_exc_with_try_except()
+    async def delete_unused_clients(older_than_hours: int = 24) -> int:
+        """Клієнти DCR без жодного токена, створені раніше за cutoff (чистка флуду /oauth/register)."""
+        cutoff = datetime.utcnow() - timedelta(hours=older_than_hours)
+        used = select(McpOAuthTokenModel.client_id).where(McpOAuthTokenModel.client_id == McpOAuthClientModel.client_id)
+        async with db_connection.async_session() as session:
+            res = await session.execute(
+                delete(McpOAuthClientModel).where(McpOAuthClientModel.created_at < cutoff, ~used.exists()))
+            await session.commit()
+            return res.rowcount

@@ -81,6 +81,7 @@ async def _retention_loop():
             logging.info(f"retention: messages deleted={deleted}")
             await MessageRepository.delete_old_audit(AUDIT_RETENTION_DAYS)
             await McpOAuthRepository.delete_expired(7)
+            await McpOAuthRepository.delete_unused_clients(24)
         except Exception as e:
             logging.error(f"retention: {type(e).__name__}")
         await asyncio.sleep(24 * 3600)

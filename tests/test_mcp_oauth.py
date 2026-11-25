@@ -635,3 +635,40 @@ async def test_k_routes_and_raw_key_bearer_gone(client):
     secret, _ = await new_key()
     assert (await client.post(f"/mcp/k/{secret}", json=INIT)).status_code == 404
     assert (await client.post("/mcp", json=INIT, headers=hdr(secret))).status_code == 401
+
+
+def test_access_log_filter_redacts_tokens():
+    f = server._RedactSecrets()
+    raw, acc, ref = "tgb_" + "A" * 20, "tgba_" + "b-_" * 10, "tgbr_" + "c" * 20
+    rec = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/1.1" %d',
+                            ("1.2.3.4:5", "POST", f"/mcp/k/{raw}?t={acc}&r={ref}", 404), None)
+    assert f.filter(rec)
+    out = rec.getMessage()
+    assert out.count("tgb_***") == 3 and raw not in out and acc not in out and ref not in out and "404" in out
+    assert any(isinstance(x, server._RedactSecrets) for x in logging.getLogger("uvicorn.access").filters)
+
+
+async def test_register_global_cap_200_per_hour(client):
+    now = server._now()
+    oauth._reg_all.extend([now] * (oauth.REGISTER_GLOBAL_LIMIT - 1))
+    assert (await client.post("/oauth/register", json={"redirect_uris": [REDIR]})).status_code == 201
+    assert (await client.post("/oauth/register", json={"redirect_uris": [REDIR]})).status_code == 429
+    oauth._reg_all.clear()
+    oauth._reg_all.extend([now - oauth.REGISTER_WINDOW - 1] * oauth.REGISTER_GLOBAL_LIMIT)
+    assert (await client.post("/oauth/register", json={"redirect_uris": [REDIR]})).status_code == 201
+
+
+async def test_delete_unused_clients(client):
+    from bot.data.models import McpOAuthClientModel as C
+    old = await register(client)
+    fresh = await register(client)
+    c = await connect(client)  # у цього клієнта є токени
+    used = c["cid"]
+    async with db_connection.async_session() as s:
+        await s.execute(update(C).where(C.client_id.in_([old, used])).values(
+            created_at=datetime.utcnow() - timedelta(hours=25)))
+        await s.commit()
+    assert await McpOAuthRepository.delete_unused_clients(24) == 1
+    async with db_connection.async_session() as s:
+        left = set((await s.execute(select(C.client_id))).scalars().all())
+    assert left == {used, fresh}
