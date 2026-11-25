@@ -32,3 +32,6 @@ pgdata/
 prod_config/*
 !prod_config/docker-compose.yaml
 !prod_config/entrypoint.sh
+logs/app.log
+/logs
+logs/app.log
